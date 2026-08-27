@@ -20,7 +20,7 @@ This plan converts the `DesignDoc-V1` design into an executable build. It is org
 | Item | Decision |
 |------|----------|
 | Backend | Python 3.11, FastAPI, `uv` for dependency management |
-| Frontend | Streamlit (4 tabs) for MVP speed; React/Next.js deferred to Phase 2 |
+| Frontend | React + TypeScript SPA (4 routes) for the MVP; Vite or Next.js (App Router) |
 | Agents | Microsoft Agent Framework (`agent-framework` Python package) |
 | LLM | Azure OpenAI `gpt-4o` (reasoning) + `text-embedding-3-large` (vectors) |
 | OCR | Azure AI Document Intelligence `prebuilt-read` + `prebuilt-layout` |
@@ -108,16 +108,25 @@ Hackathon-HealthIQ/
 │     ├─ integration/
 │     └─ fixtures/
 ├─ frontend/
-│  ├─ app.py                         # Streamlit entry, 4 tabs
-│  ├─ pages/
-│  │  ├─ 1_Prescription_Analyzer.py
-│  │  ├─ 2_Health_Profile.py
-│  │  ├─ 3_Report_Comparison.py
-│  │  └─ 4_Meal_Planner.py
-│  └─ components/
-│     ├─ charts.py
-│     ├─ consent.py
-│     └─ disclaimers.py
+│  ├─ src/
+│  │  ├─ main.tsx                    # React entry / router bootstrap
+│  │  ├─ routes/
+│  │  │  ├─ PrescriptionAnalyzer.tsx
+│  │  │  ├─ HealthProfile.tsx
+│  │  │  ├─ ReportComparison.tsx
+│  │  │  └─ MealPlanner.tsx
+│  │  ├─ lib/
+│  │  │  ├─ apiClient.ts             # single typed HTTP client
+│  │  │  ├─ auth.ts                  # MSAL config + token acquisition
+│  │  │  └─ types.ts                 # shared API/domain types
+│  │  └─ components/
+│  │     ├─ Charts.tsx
+│  │     ├─ ConsentModal.tsx
+│  │     └─ Disclaimer.tsx
+│  ├─ index.html
+│  ├─ package.json
+│  ├─ tsconfig.json
+│  └─ vite.config.ts
 ├─ data/
 │  ├─ medicines/medicine_catalog.csv
 │  ├─ reference_ranges/lab_reference_ranges.csv
@@ -145,7 +154,7 @@ Hackathon-HealthIQ/
 | 0.1 | Init repo, `uv init`, pin Python 3.11, add ruff + pytest | `pyproject.toml`, CI-ready lint | Backend |
 | 0.2 | Create `.env.example` and `app/config.py` with pydantic-settings | Typed settings object | Backend |
 | 0.3 | FastAPI skeleton with `/health`, CORS, exception handlers, request-id middleware | `GET /health` returns 200 | Backend |
-| 0.4 | Streamlit shell with 4 tabs, consent banner, global disclaimer footer | Clickable UI shell | Frontend |
+| 0.4 | React + TypeScript shell with 4 routes, consent modal, global disclaimer footer | Clickable UI shell | Frontend |
 | 0.5 | Bicep `main.bicep` provisioning all Azure resources with managed identity + RBAC | `az deployment group create` succeeds | Infra |
 | 0.6 | Wire Key Vault + `DefaultAzureCredential`; no secrets in code | Local + cloud auth working | Infra |
 
@@ -163,7 +172,7 @@ Hackathon-HealthIQ/
 | Azure OpenAI | S0 | Deployments: `gpt-4o`, `text-embedding-3-large` |
 | Key Vault | Standard | RBAC auth mode |
 | App Insights + LA workspace | Pay-as-you-go | OTEL exporter from FastAPI + agents |
-| Container Apps (optional) | Consumption | Hosting for backend + Streamlit at demo time |
+| Container Apps (optional) | Consumption | Hosting for backend + React SPA at demo time |
 
 ---
 
@@ -350,18 +359,18 @@ Sections in order:
 5. Doctor approval section: per-row Approve / Modify / Reject checkboxes, notes field, signature and date lines.
 6. Footer disclaimer + provenance list + "Data is demo/curated" notice.
 
-#### 5.4 Streamlit UI
+#### 5.4 React UI
 
-| Tab | Contents |
-|-----|----------|
+| Route | Contents |
+|-------|----------|
 | Prescription Analyzer | Upload -> OCR preview with confidence highlighting -> editable confirmation grid -> alternatives table with savings -> "Generate doctor PDF" -> share link |
 | Health Profile | Demographics + preferences form, consent status, report history timeline, health score gauge, organ/system cards with risk chips, specialist suggestion panel with links |
 | Report Comparison | Two-report picker (upload or history) -> color-coded before/after table -> line chart per repeated parameter -> radar chart by system -> progression narrative |
 | Meal Planner | Condition chips from latest report, allergy/cuisine/budget inputs -> 3-day plan cards -> avoid list -> rationale with sources |
 
-Charts via Plotly. Every tab renders the disclaimer component; consent modal blocks upload until accepted.
+Charts via Recharts or Plotly-react. Every route renders the disclaimer component; consent modal blocks upload until accepted.
 
-**Exit criteria:** All 4 tabs work end to end against the live backend with sample data.
+**Exit criteria:** All 4 routes work end to end against the live backend with sample data.
 
 ---
 
@@ -523,7 +532,7 @@ CREATE TABLE ShareLink (
 
 ## 8. Immediate Next Actions
 
-1. Confirm frontend choice (Streamlit for MVP) and Azure subscription/region.
+1. Confirm frontend choice (React + TypeScript SPA for MVP) and Azure subscription/region.
 2. Scaffold `backend/` and `frontend/` per section 2 and run `uv sync`.
 3. Deploy `infra/main.bicep` to a dedicated resource group.
 4. Author the 4 seed datasets in `data/` - this is the critical path for M2 and M3.
