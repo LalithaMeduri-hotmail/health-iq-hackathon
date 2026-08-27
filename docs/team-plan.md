@@ -19,7 +19,7 @@ estimated_reading_time: 18
 | **D1** | Platform and Ingestion | Bicep/IaC, Key Vault, Blob, Document Intelligence, de-identification, observability, deployment | Azure, Python, DevOps |
 | **D2** | Domain Data and RAG | Seed datasets, medicine/lab normalization, comparison math, Azure AI Search indexes, ingestion pipeline | Python, data modelling, search |
 | **D3** | Agents and Outputs | Microsoft Agent Framework, 6 agents, tools, safety reviewer, PDF builder, share links | Python, LLM/prompting |
-| **D4** | API and Frontend | FastAPI routers, pydantic contracts, Streamlit 4-tab UI, charts, consent/disclaimer components, demo assets | Python, FastAPI, UI |
+| **D4** | API and Frontend | FastAPI routers, pydantic contracts, React + TypeScript 4-route UI, charts, consent/disclaimer components, demo assets | Python, FastAPI, React/TypeScript |
 
 **Rule:** D4 owns the contracts. All pydantic models in `backend/app/models/` are written by D4 on Day 1 and frozen by end of Day 1. Everyone codes against them.
 
@@ -68,7 +68,7 @@ graph LR
   PDF --> SHARE[D3: Share links]
 
   SAFE --> R
-  R --> UI[D4: Streamlit tabs]
+  R --> UI[D4: React routes]
   SHARE --> UI
 
   UI --> E2E[All: E2E + demo]
@@ -94,7 +94,7 @@ Longest chain runs through **D1 (OCR) -> D2 (normalization) -> D3 (agents)**. Pr
 | **D1 (2nd half)** | Manually run Doc Intelligence on 2 prescriptions + 2 reports; commit raw JSON to `tests/fixtures/ocr/` | Fixtures committed and announced in channel |
 | **D2** | Author seed datasets: `medicine_catalog.csv` (start 20 rows), `lab_reference_ranges.csv` (17 canonical params), `specialist_mapping.csv`, `lab_synonyms.json` | Files committed; schema matches section 4 of implementation plan |
 | **D3** | Set up `AzureOpenAIChatClient` with `DefaultAzureCredential`; verify a `gpt-4o` round trip; scaffold `agents/orchestrator.py` and 6 empty agent modules; draft prompt files | "hello world" agent call returns a response |
-| **D4** | **Write and freeze `app/models/` pydantic schemas for all 11 endpoints**; FastAPI app factory, `/health`, error handlers, request-id middleware; all routers returning fixtures; Streamlit shell with 4 tabs + consent modal + disclaimer footer | OpenAPI docs render; UI shell talks to mocked API |
+| **D4** | **Write and freeze `app/models/` pydantic schemas for all 11 endpoints**; FastAPI app factory, `/health`, error handlers, request-id middleware; all routers returning fixtures; React shell with 4 routes + consent modal + disclaimer footer | OpenAPI docs render; UI shell talks to mocked API |
 
 **End-of-day sync (30 min):** review frozen contracts, confirm fixture availability, confirm Azure access for all four.
 
@@ -132,7 +132,7 @@ Longest chain runs through **D1 (OCR) -> D2 (normalization) -> D3 (agents)**. Pr
 
 | Dev | Tasks | Depends on |
 |-----|-------|------------|
-| **D1** | Deploy backend + Streamlit to Container Apps; availability test + alerts; security pass (private access, no secrets, dependency scan); blob lifecycle rule | Day 3 |
+| **D1** | Deploy backend + React SPA to Container Apps; availability test + alerts; security pass (private access, no secrets, dependency scan); blob lifecycle rule | Day 3 |
 | **D2** | Expand fixtures to 5 prescriptions + 3 report pairs; tune fuzzy thresholds and synonym coverage against them; unit tests for savings math and unit conversion | Day 3 |
 | **D3** | `services/pdf_builder.py` (6 sections, approval checkboxes, provenance footer); share links (hashed token, 24 h user-delegation SAS, rate limit, revoke); `/pdf/generate` + `/share/{id}` | D2 alternatives |
 | **D4** | Meal Planner tab; wire PDF download + share link into UI; loading/error states; low-confidence confirmation UX; responsive layout pass | D3 PDF |
@@ -257,7 +257,7 @@ Any change to a frozen contract requires a message in the team channel plus a fi
 1. **`app/models/` all schemas, frozen** (Day 1 AM) **[P0, unblocks everyone]**
 2. FastAPI factory, `/health`, middleware, problem-details errors (Day 1 AM) **[P0]**
 3. All 11 routers returning fixtures (Day 1 PM) **[P0]**
-4. Streamlit shell, 4 tabs, consent modal, disclaimer component (Day 1 PM) **[P0]**
+4. React shell, 4 routes, consent modal, disclaimer component (Day 1 PM) **[P0]**
 5. Cosmos + SQL repositories (Day 2 AM) **[P1]**
 6. Real prescription/report/profile routers (Day 2) **[P0]**
 7. Prescription Analyzer tab with confirmation grid (Day 2 PM) **[P0]**
