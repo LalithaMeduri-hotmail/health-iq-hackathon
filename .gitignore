@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Bicep/ARM build artifacts (see infra/README.md - always build to a temp file, not into the repo)
+infra/*.json
+!infra/main.parameters.json
+!infra/main.local.parameters.json
+!infra/main.dev.parameters.json
+out.json
+err.txt
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json

@@ -1,0 +1,20 @@
+{
+  "_comment": "Synonym map -> canonical lab parameter key (implementation-plan.md Section 2.4). Owner: D2.",
+  "glucose_fasting": ["Fasting Blood Sugar", "FBS", "Fasting Glucose"],
+  "glucose_pp": ["Post Prandial Blood Sugar", "PPBS", "PP Glucose"],
+  "hba1c": ["HbA1c", "Glycated Haemoglobin", "A1C"],
+  "hemoglobin": ["Hb", "Haemoglobin"],
+  "ldl": ["LDL Cholesterol", "LDL-C"],
+  "hdl": ["HDL Cholesterol", "HDL-C"],
+  "triglycerides": ["TG", "Triglyceride"],
+  "total_cholesterol": ["Total Cholesterol", "TC"],
+  "creatinine": ["Serum Creatinine", "Creat"],
+  "urea": ["Blood Urea", "BUN"],
+  "tsh": ["Thyroid Stimulating Hormone", "TSH"],
+  "sgpt_alt": ["SGPT", "ALT", "Alanine Aminotransferase"],
+  "sgot_ast": ["SGOT", "AST", "Aspartate Aminotransferase"],
+  "vitamin_d": ["Vitamin D", "25-OH Vitamin D", "Vitamin D3"],
+  "vitamin_b12": ["Vitamin B12", "Cobalamin"],
+  "wbc": ["White Blood Cell Count", "Total Leukocyte Count", "TLC"],
+  "platelets": ["Platelet Count", "PLT"]
+}

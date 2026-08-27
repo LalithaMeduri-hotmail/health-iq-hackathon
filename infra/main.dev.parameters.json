@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "dev"
+    },
+    "location": {
+      "value": "eastus2"
+    },
+    "openAiLocation": {
+      "value": "eastus2"
+    },
+    "namePrefix": {
+      "value": "hiq"
+    },
+    "developerPrincipalId": {
+      "value": ""
+    },
+    "sqlAadAdminLogin": {
+      "value": "<team-security-group-name-or-upn>"
+    },
+    "sqlAadAdminObjectId": {
+      "value": "<team-security-group-or-user-object-id>"
+    },
+    "sqlAadAdminPrincipalType": {
+      "value": "Group"
+    },
+    "localDevClientIp": {
+      "value": ""
+    },
+    "deployContainerApps": {
+      "value": true
+    },
+    "openAiChatCapacity": {
+      "value": 10
+    },
+    "openAiEmbeddingCapacity": {
+      "value": 30
+    },
+    "searchSkuName": {
+      "value": "basic"
+    },
+    "sqlDatabaseSkuName": {
+      "value": "Basic"
+    },
+    "sqlDatabaseSkuTier": {
+      "value": "Basic"
+    }
+  }
+}
