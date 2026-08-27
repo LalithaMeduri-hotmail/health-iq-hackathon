@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "local"
+    },
+    "location": {
+      "value": "eastus2"
+    },
+    "openAiLocation": {
+      "value": "eastus2"
+    },
+    "namePrefix": {
+      "value": "hiq"
+    },
+    "developerPrincipalId": {
+      "value": "<your-entra-object-id>"
+    },
+    "sqlAadAdminLogin": {
+      "value": "<your-upn-e.g.-alice@contoso.com>"
+    },
+    "sqlAadAdminObjectId": {
+      "value": "<your-entra-object-id>"
+    },
+    "sqlAadAdminPrincipalType": {
+      "value": "User"
+    },
+    "localDevClientIp": {
+      "value": "<your-public-ip>"
+    },
+    "deployContainerApps": {
+      "value": false
+    },
+    "openAiChatCapacity": {
+      "value": 10
+    },
+    "openAiEmbeddingCapacity": {
+      "value": 30
+    },
+    "searchSkuName": {
+      "value": "basic"
+    },
+    "sqlDatabaseSkuName": {
+      "value": "Basic"
+    },
+    "sqlDatabaseSkuTier": {
+      "value": "Basic"
+    }
+  }
+}
