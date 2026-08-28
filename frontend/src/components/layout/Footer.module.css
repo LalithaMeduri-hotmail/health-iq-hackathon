@@ -1,0 +1,118 @@
+.footer {
+  margin-top: auto;
+  background: var(--color-bg-surface-muted);
+  border-top: 1px solid var(--color-border);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: var(--space-8);
+  padding: var(--space-10) var(--space-6);
+}
+
+.brandColumn {
+  max-width: 22rem;
+}
+
+.brandRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.logo {
+  height: 2rem;
+  width: auto;
+  transform: translateY(-3px);
+}
+
+.brandText {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-ink-900);
+  letter-spacing: -0.01em;
+}
+
+.brandAccent {
+  background: var(--gradient-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.tagline {
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-4);
+}
+
+.socialRow {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.socialIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  cursor: default;
+}
+
+.heading {
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-3);
+}
+
+.linkList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.linkList a {
+  color: var(--color-ink-700);
+  text-decoration: none;
+  font-size: var(--font-size-sm);
+}
+
+.linkList a:hover {
+  color: var(--color-brand-700);
+}
+
+.linkPlaceholder {
+  color: var(--color-ink-500);
+  font-size: var(--font-size-sm);
+  cursor: default;
+}
+
+.bottomBar {
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-4) 0;
+}
+
+.copyright {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

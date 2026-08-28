@@ -1,0 +1,34 @@
+.scroller {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.head {
+  background: var(--color-bg-surface-muted);
+}
+
+.headerCell {
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.row:not(:last-child) .cell {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cell {
+  padding: var(--space-3) var(--space-4);
+  vertical-align: middle;
+}

@@ -1,1 +1,25 @@
 brandName,activeIngredient,strengthValue,strengthUnit,dosageForm,genericName,manufacturer,mrpInr,sourceName,sourceUrl,sourceDate,isDemoData
+Glycomet,Metformin,500,mg,tablet,Metformin,USV Pvt Ltd,32.50,NPPA,https://www.nppaindia.nic.in,2026-05-01,true
+Metfor,Metformin,500,mg,tablet,Metformin,Cipla Ltd,18.90,NPPA,https://www.nppaindia.nic.in,2026-05-01,true
+Glyciphage,Metformin,500,mg,tablet,Metformin,Franco-Indian Pharma,20.10,NPPA,https://www.nppaindia.nic.in,2026-05-01,true
+Amlong,Amlodipine,5,mg,tablet,Amlodipine,Micro Labs,35.00,NPPA,https://www.nppaindia.nic.in,2026-04-15,true
+Amlopres,Amlodipine,5,mg,tablet,Amlodipine,Cipla Ltd,19.60,NPPA,https://www.nppaindia.nic.in,2026-04-15,true
+Amlodac,Amlodipine,5,mg,tablet,Amlodipine,Zydus Cadila,17.25,NPPA,https://www.nppaindia.nic.in,2026-04-15,true
+Atocor,Atorvastatin,10,mg,tablet,Atorvastatin,Zydus Cadila,88.00,NPPA,https://www.nppaindia.nic.in,2026-06-01,true
+Storvas,Atorvastatin,10,mg,tablet,Atorvastatin,Sun Pharma,95.50,NPPA,https://www.nppaindia.nic.in,2026-06-01,true
+Atorva,Atorvastatin,10,mg,tablet,Atorvastatin,Zydus Cadila,42.00,NPPA,https://www.nppaindia.nic.in,2026-06-01,true
+Pantocid,Pantoprazole,40,mg,tablet,Pantoprazole,Sun Pharma,105.00,NPPA,https://www.nppaindia.nic.in,2026-03-20,true
+Pantosec,Pantoprazole,40,mg,tablet,Pantoprazole,Cipla Ltd,58.40,NPPA,https://www.nppaindia.nic.in,2026-03-20,true
+Pan,Pantoprazole,40,mg,tablet,Pantoprazole,Alkem Labs,62.10,NPPA,https://www.nppaindia.nic.in,2026-03-20,true
+Azithral,Azithromycin,500,mg,tablet,Azithromycin,Alembic Pharma,78.00,NPPA,https://www.nppaindia.nic.in,2026-02-10,true
+Azee,Azithromycin,500,mg,tablet,Azithromycin,Cipla Ltd,72.50,NPPA,https://www.nppaindia.nic.in,2026-02-10,true
+Zithrocin,Azithromycin,500,mg,tablet,Azithromycin,FDC Ltd,41.30,NPPA,https://www.nppaindia.nic.in,2026-02-10,true
+Crocin,Paracetamol,500,mg,tablet,Paracetamol,GSK,15.00,NPPA,https://www.nppaindia.nic.in,2026-01-15,true
+Dolo,Paracetamol,500,mg,tablet,Paracetamol,Micro Labs,18.30,NPPA,https://www.nppaindia.nic.in,2026-01-15,true
+Calpol,Paracetamol,500,mg,tablet,Paracetamol,GSK,14.10,NPPA,https://www.nppaindia.nic.in,2026-01-15,true
+Telma,Telmisartan,40,mg,tablet,Telmisartan,Glenmark,110.00,NPPA,https://www.nppaindia.nic.in,2026-05-20,true
+Telmikind,Telmisartan,40,mg,tablet,Telmisartan,Mankind Pharma,54.75,NPPA,https://www.nppaindia.nic.in,2026-05-20,true
+Telsartan,Telmisartan,40,mg,tablet,Telmisartan,Zydus Cadila,49.90,NPPA,https://www.nppaindia.nic.in,2026-05-20,true
+Augmentin,Amoxicillin+Clavulanic acid,625,mg,tablet,Amoxicillin+Clavulanate,GSK,210.00,NPPA,https://www.nppaindia.nic.in,2026-04-01,true
+Clavam,Amoxicillin+Clavulanic acid,625,mg,tablet,Amoxicillin+Clavulanate,Alkem Labs,131.20,NPPA,https://www.nppaindia.nic.in,2026-04-01,true
+Moxikind-CV,Amoxicillin+Clavulanic acid,625,mg,tablet,Amoxicillin+Clavulanate,Mankind Pharma,118.60,NPPA,https://www.nppaindia.nic.in,2026-04-01,true
