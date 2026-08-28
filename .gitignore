@@ -2,14 +2,19 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-test/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+.local-blob-store/
 
 # Node / frontend
 node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/vite.config.js
+frontend/vite.config.d.ts
+*.tsbuildinfo
 
 # Env / secrets
 .env

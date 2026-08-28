@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from app.api import mealplan, medicines, pdf, prescriptions, profile, reports, share
 from app.config import get_settings
+from app.errors import DomainError
 from app.models.common import ProblemDetails
 
 
@@ -38,10 +39,25 @@ def create_app() -> FastAPI:
         response.headers["X-Request-Id"] = request.state.request_id
         return response
 
+    @app.exception_handler(DomainError)
+    async def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
+        """Centralized domain exception -> RFC 7807 mapping (backend.instructions.md)."""
+        problem = ProblemDetails(
+            type=f"https://healthiq/errors/{exc.type_slug}",
+            title=exc.title,
+            status=exc.status,
+            detail=exc.detail,
+            instance=getattr(request.state, "request_id", "unknown"),
+            errors=exc.errors,
+        )
+        return JSONResponse(
+            status_code=exc.status,
+            content=problem.model_dump(),
+            media_type="application/problem+json",
+        )
+
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-        # TODO(D4): replace with a centralized map of domain exceptions -> RFC 7807 problem
-        # details (LowConfidenceError -> 422, NotFoundError -> 404, ForbiddenError -> 403, ...).
         problem = ProblemDetails(
             type="https://healthiq/errors/internal-error",
             title="Internal server error",

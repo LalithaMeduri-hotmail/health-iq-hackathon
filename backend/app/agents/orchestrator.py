@@ -11,6 +11,8 @@ user-facing payload.
 from dataclasses import dataclass
 from typing import Any
 
+from app.agents import prescription_agent, safety_agent
+
 
 @dataclass(frozen=True)
 class AgentResult:
@@ -26,4 +28,10 @@ async def run(feature: str, payload: dict) -> AgentResult:
 
     to its agent, then always run `safety_agent.review()` before returning.
     """
-    raise NotImplementedError
+    if feature == "prescription":
+        draft = await prescription_agent.run(payload)
+    else:
+        raise NotImplementedError(f"Agent for feature {feature!r} is not implemented yet")
+
+    verdict = safety_agent.review(draft.model_dump(by_alias=True))
+    return AgentResult(data=draft, safety_pass=verdict.passed, safety_notes=verdict.violations)

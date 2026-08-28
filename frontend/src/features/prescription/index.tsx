@@ -2,10 +2,8 @@
  * Prescription Analyzer feature root (frontend.instructions.md - colocate this feature's
  * components/hooks/types here, not scattered across the tree).
  *
- * TODO(D4): upload -> OCR preview with confidence highlighting -> editable confirmation grid
- * -> alternatives table with savings -> "Generate doctor PDF" -> share link.
+ * Flow: upload -> OCR/manual entry -> confirmation grid for low-confidence lines -> doctor-
+ * reviewable alternatives with savings + provenance -> (PDF/share is Feature 5, not wired here).
  */
 
-export function PrescriptionAnalyzerFeature() {
-  return <section aria-label="Prescription Analyzer">TODO: prescription upload + analysis UI</section>;
-}
+export { PrescriptionAnalyzerFeature } from './PrescriptionAnalyzerFeature';

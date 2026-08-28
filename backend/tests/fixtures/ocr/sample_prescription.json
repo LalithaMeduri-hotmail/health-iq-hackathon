@@ -1,0 +1,12 @@
+{
+  "pages": 1,
+  "handwrittenRatio": 0.05,
+  "tables": [],
+  "lines": [
+    { "text": "Dr. Ashok Mehta, MBBS MD", "confidence": 0.95, "bbox": [0, 0, 200, 20] },
+    { "text": "Patient: Rohan Sharma", "confidence": 0.93, "bbox": [0, 24, 200, 44] },
+    { "text": "Glycomet 500mg 1-0-1 x10 days", "confidence": 0.92, "bbox": [0, 48, 220, 68] },
+    { "text": "Amlong 5mg 0-0-1 x30 days", "confidence": 0.65, "bbox": [0, 72, 220, 92] },
+    { "text": "Atocor 10mg 0-0-1 x30 days", "confidence": 0.9, "bbox": [0, 96, 220, 116] }
+  ]
+}
