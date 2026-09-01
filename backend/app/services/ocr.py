@@ -57,10 +57,6 @@ def _demo_layout_envelope() -> OcrEnvelope:
     return _load_demo_envelope(_FIXTURE_DIR / fixture)
 
 
-def _spans_overlap(offset: int, length: int, spans) -> bool:
-    return any(span.offset < offset + length and offset < span.offset + span.length for span in spans or [])
-
-
 async def _extract_live(file: bytes, *, mode: str) -> OcrEnvelope:
     """Real `prebuilt-read`/`prebuilt-layout` call via Document Intelligence, polled with backoff to 60s."""
     from app.deps import get_docintel_client
@@ -76,16 +72,11 @@ async def _extract_live(file: bytes, *, mode: str) -> OcrEnvelope:
     except Exception as exc:  # noqa: BLE001 - any SDK failure surfaces as a typed upstream error
         raise UpstreamUnavailableError(f"Document Intelligence request failed: {exc}") from exc
 
-    # Confidence and handwriting live on page words / document styles, not on the line itself.
-    handwritten_spans = [
-        span for style in (result.styles or []) if style.is_handwritten for span in (style.spans or [])
-    ]
-
     lines: list[OcrLine] = []
     for page in result.pages or []:
         page_words = page.words or []
-        words = [(word.span.offset, word.span.length, word.confidence) for word in (page.words or []) if word.span]
         for line in page.lines or []:
+            # Confidence lives on page words, not on the line itself.
             line_spans = [(span.offset, span.offset + span.length) for span in (line.spans or [])]
             word_confidences = [
                 word.confidence
