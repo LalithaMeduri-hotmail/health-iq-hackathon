@@ -1,4 +1,4 @@
-// Azure AI Foundry account (gpt-4o reasoning + text-embedding-3-large vectors) for agents + RAG
+// Azure AI Foundry account (gpt-5.4 reasoning + text-embedding-3-large vectors) for agents + RAG
 // (Implementation Plan M3/M4). Provisioned as kind=AIServices with a Foundry Project so the
 // account also exposes the full Foundry model catalog/portal; agents still call it through the
 // OpenAI-compatible endpoint via AzureOpenAIChatClient (docs/.github/instructions/agents.instructions.md).
@@ -24,10 +24,13 @@ param skuName string = 'S0'
 param openAiUserPrincipalIds array = []
 
 @description('Chat model deployment name used by agents.')
-param chatDeploymentName string = 'gpt-4o'
+param chatDeploymentName string = 'gpt-5.4'
+
+@description('Chat model name.')
+param chatModelName string = 'gpt-5.4'
 
 @description('Chat model version.')
-param chatModelVersion string = '2024-08-06'
+param chatModelVersion string = '2026-03-05'
 
 @description('Chat deployment throughput capacity (in 1K TPM units).')
 param chatCapacity int = 10
@@ -90,7 +93,7 @@ resource chatDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-0
   properties: {
     model: {
       format: 'OpenAI'
-      name: 'gpt-4o'
+      name: chatModelName
       version: chatModelVersion
     }
     versionUpgradeOption: 'OnceNewDefaultVersionAvailable'

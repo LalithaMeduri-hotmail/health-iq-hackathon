@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     azure_search_endpoint: str = ""
     azure_docintel_endpoint: str = ""
     azure_openai_endpoint: str = ""
-    azure_openai_chat_deployment: str = "gpt-4o"
+    azure_openai_chat_deployment: str = "gpt-5.4"
     azure_openai_embedding_deployment: str = "text-embedding-3-large"
     applicationinsights_connection_string: str = ""
 

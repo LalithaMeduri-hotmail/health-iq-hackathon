@@ -18,8 +18,14 @@ param environmentName string = 'local'
 @description('Primary Azure region for most resources.')
 param location string = resourceGroup().location
 
-@description('Region for the Azure AI Foundry account. Override if gpt-4o/text-embedding-3-large quota is unavailable in `location`.')
+@description('Region for the Azure AI Foundry account. Override if gpt-5.4/text-embedding-3-large quota is unavailable in `location`.')
 param openAiLocation string = location
+
+@description('Region for the Azure SQL server. Override if `location` rejects new SQL server creation.')
+param sqlLocation string = location
+
+@description('Region for Azure AI Search. Override if `location` is out of Search capacity.')
+param searchLocation string = location
 
 @description('Short workload prefix used in resource names.')
 param namePrefix string = 'hiq'
@@ -164,7 +170,7 @@ module cosmos 'modules/cosmos.bicep' = {
 module sql 'modules/sql.bicep' = {
   name: 'sql'
   params: {
-    location: location
+    location: sqlLocation
     sqlServerName: sqlServerName
     tags: tags
     aadAdminLogin: sqlAadAdminLogin
@@ -179,7 +185,7 @@ module sql 'modules/sql.bicep' = {
 module search 'modules/search.bicep' = {
   name: 'search'
   params: {
-    location: location
+    location: searchLocation
     searchServiceName: searchServiceName
     tags: tags
     skuName: searchSkuName

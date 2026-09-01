@@ -34,7 +34,7 @@ infra/
 │  ├─ sql.bicep                   # Entra-only Azure SQL server + database
 │  ├─ search.bicep                # Azure AI Search (hybrid + semantic ranker)
 │  ├─ docintel.bicep              # Document Intelligence (prebuilt-read/layout)
-│  ├─ openai.bicep                # Azure AI Foundry account (kind=AIServices) + project: gpt-4o + text-embedding-3-large
+│  ├─ openai.bicep                # Azure AI Foundry account (kind=AIServices) + project: gpt-5.4 + text-embedding-3-large
 │  └─ containerapps.bicep         # Optional dev/demo hosting (backend + frontend)
 └─ scripts/
    ├─ deploy.ps1                  # az deployment group create wrapper
@@ -48,8 +48,26 @@ infra/
 - Bicep CLI: `az bicep install` (or `az bicep upgrade`)
 - Contributor + User Access Administrator (or Owner) on the target subscription/resource group,
   so the deployment can create RBAC role assignments
-- Azure OpenAI access approved on the subscription, with `gpt-4o` and `text-embedding-3-large`
+- Azure OpenAI access approved on the subscription, with `gpt-5.4` and `text-embedding-3-large`
   quota in the target region
+- `deploy.ps1` requires PowerShell 7 (`pwsh`); on Windows PowerShell 5.1, run the equivalent
+  `az deployment group create` command shown below instead.
+
+### Known regional/subscription quirks (observed 2026-09)
+
+- `chatModelVersion`/`chatModelName` in `modules/openai.bicep` may need bumping if Azure marks the
+  current default model version "Deprecating" (`az cognitiveservices model list -l <region> --query "[?model.name=='gpt-5.4']"`).
+- If Azure AI Search reports `InsufficientResourcesAvailable` in `location`, override just Search
+  via the `searchLocation` parameter (already set to `eastus` in `main.local.parameters.json`).
+- If Azure SQL reports `RegionDoesNotAllowProvisioning`, try the `sqlLocation` parameter override -
+  but if it fails across multiple regions (eastus2/eastus/westus2/southcentralus all failed on one
+  subscription), that's a subscription-level restriction on first-time SQL server creation, not a
+  regional one; it needs an Azure support request. The app degrades gracefully without it -
+  `sql_repo.py` falls back to `data/medicines/medicine_catalog.csv` whenever
+  `AZURE_SQL_SERVER_FQDN` is unset, so leave that `.env` value empty and move on.
+- A failed SQL server deployment can leave a phantom name/location reservation ("resource already
+  exists in location X") even though `az sql server list` shows nothing - clear it with
+  `az sql server delete --name <name> --resource-group <rg> --yes` before retrying in a new region.
 
 ## 1. Fill in parameters
 
@@ -92,7 +110,7 @@ Deployment provisions:
 - **Azure AI Search** (`basic`, semantic ranker `standard`) ready for the 4 RAG indexes built by
   `scripts/build_search_indexes.py`.
 - **Document Intelligence** (`S0`) and **Azure AI Foundry account** (`S0`, kind `AIServices`, with a
-  Foundry Project and `gpt-4o` + `text-embedding-3-large` deployments). `allowProjectManagement`
+  Foundry Project and `gpt-5.4` + `text-embedding-3-large` deployments). `allowProjectManagement`
   is enabled so the account also exposes the full Foundry model catalog and portal; agents keep
   calling it through the OpenAI-compatible endpoint via `AzureOpenAIChatClient`.
 - **Key Vault** (RBAC mode) pre-loaded with every endpoint/deployment name as a secret, so

@@ -12,6 +12,7 @@ dependencies = [
   "azure-identity>=1.17",
   "azure-storage-blob>=12.22",
   "azure-cosmos>=4.7",
+  "aiohttp>=3.10", # required by azure-cosmos's async client transport
   "azure-search-documents>=11.5",
   "azure-ai-documentintelligence>=1.0.0b4",
   "azure-keyvault-secrets>=4.8",
