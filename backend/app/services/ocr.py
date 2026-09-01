@@ -56,16 +56,18 @@ async def _extract_read_live(file: bytes) -> OcrEnvelope:
         raise UpstreamUnavailableError(f"Document Intelligence request failed: {exc}") from exc
 
     lines: list[OcrLine] = []
-    handwritten_count = 0
-    total_count = 0
     for page in result.pages or []:
+        page_words = page.words or []
         for line in page.lines or []:
-            confidence = min((word.confidence for word in (line.words or [])), default=1.0)
-            polygon = getattr(line, "polygon", None) or []
+            line_spans = [(span.offset, span.offset + span.length) for span in (line.spans or [])]
+            word_confidences = [
+                word.confidence
+                for word in page_words
+                if any(start <= word.span.offset < end for start, end in line_spans)
+            ]
+            confidence = min(word_confidences) if word_confidences else 1.0
+            polygon = line.polygon or []
             lines.append(OcrLine(text=line.content, confidence=confidence, bbox=[float(p) for p in polygon]))
-            total_count += 1
-            if getattr(line, "kind", None) == "handwriting":
-                handwritten_count += 1
 
     tables: list[list[list[str]]] = []
     for table in result.tables or []:
@@ -74,7 +76,11 @@ async def _extract_read_live(file: bytes) -> OcrEnvelope:
             grid[cell.row_index][cell.column_index] = cell.content
         tables.append(grid)
 
-    handwritten_ratio = (handwritten_count / total_count) if total_count else 0.0
+    content_length = len(result.content or "")
+    handwritten_length = sum(
+        span.length for style in (result.styles or []) if style.is_handwritten for span in (style.spans or [])
+    )
+    handwritten_ratio = (handwritten_length / content_length) if content_length else 0.0
     return OcrEnvelope(pages=len(result.pages or []), lines=lines, tables=tables, handwritten_ratio=handwritten_ratio)
 
 

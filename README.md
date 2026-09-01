@@ -57,7 +57,7 @@ machine while talking to those resources over the network.
 
 - Azure CLI (`az login`) and Bicep CLI (`az bicep install`)
 - Contributor + User Access Administrator (or Owner) on the target subscription/resource group
-- Azure OpenAI access with `gpt-4o` and `text-embedding-3-large` quota in the target region
+- Azure OpenAI access with `gpt-5.4` and `text-embedding-3-large` quota in the target region
 
 ### Provision for local development
 

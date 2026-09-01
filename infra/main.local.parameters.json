@@ -11,6 +11,9 @@
     "openAiLocation": {
       "value": "eastus2"
     },
+    "searchLocation": {
+      "value": "eastus"
+    },
     "namePrefix": {
       "value": "hiq"
     },

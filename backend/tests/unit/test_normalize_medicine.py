@@ -59,6 +59,85 @@ def test_normalize_flags_unrecognized_brand_for_confirmation() -> None:
     assert item.needs_user_confirmation is True
 
 
+def test_normalize_skips_signa_directive_lines() -> None:
+    """Latin/administrative section labels (e.g. "Seg:"/"Signa") must never be surfaced as a
+    bogus medicine, even if a strength-like token happens to follow them on the same line."""
+    envelope = _envelope(("Seg: 5ml t.i.d. a.c.", 0.9))
+
+    assert normalize(envelope) == []
+
+
+def test_normalize_merges_columnar_name_and_quantity_lines() -> None:
+    """Some paper forms (e.g. DD Form 1289) put the drug name and its ml/gm quantity in separate
+    columns; Document Intelligence emits them as two same-row OCR lines. They must be
+    reconstructed into one logical line before strength/brand parsing."""
+    envelope = OcrEnvelope(
+        pages=1,
+        lines=[
+            OcrLine(text="Glycomet", confidence=0.9, bbox=[10, 100, 120, 100, 120, 130, 10, 130]),
+            OcrLine(text="500mg", confidence=0.85, bbox=[400, 105, 460, 105, 460, 128, 400, 128]),
+        ],
+        tables=[],
+        handwritten_ratio=0.0,
+    )
+
+    [item] = normalize(envelope)
+
+    assert item.raw_text == "Glycomet 500mg"
+    assert item.brand_name == "Glycomet"
+    assert item.strength_value == 500.0
+
+
+def test_normalize_does_not_merge_vertically_stacked_lines() -> None:
+    """Lines on different rows (no y-overlap) must stay separate, even with real bbox data."""
+    envelope = OcrEnvelope(
+        pages=1,
+        lines=[
+            OcrLine(text="Glycomet 500mg 1-0-1 x10 days", confidence=0.9, bbox=[10, 100, 300, 100, 300, 130, 10, 130]),
+            OcrLine(text="Amlong 5mg 0-0-1 x30 days", confidence=0.9, bbox=[10, 160, 300, 160, 300, 190, 10, 190]),
+        ],
+        tables=[],
+        handwritten_ratio=0.0,
+    )
+
+    items = normalize(envelope)
+
+    assert [item.brand_name for item in items] == ["Glycomet", "Amlong"]
+
+
+def test_normalize_surfaces_unitless_quantity_for_unfamiliar_drug_name() -> None:
+    """Archaic/compounding drug names not in the catalog often lack a recognized dosage unit
+    (e.g. "Tr Belladonna 15" instead of "15ml"). They must still surface for confirmation
+    instead of being silently dropped, so the user can correct/confirm them manually."""
+    envelope = _envelope(("Tr Belladonna 15", 0.9))
+
+    [item] = normalize(envelope)
+
+    assert item.raw_text == "Tr Belladonna 15"
+    assert item.strength_value == 15.0
+    assert item.strength_unit is None
+    assert item.needs_user_confirmation is True
+
+
+def test_normalize_skips_administrative_header_lines_with_bare_numbers() -> None:
+    """Form header fields with numbers (ward/reg/page numbers) must not be mistaken for the
+    unitless-quantity fallback and surfaced as bogus medicines."""
+    envelope = _envelope(("Ward No 120", 0.9), ("Reg No 4521", 0.9))
+
+    assert normalize(envelope) == []
+
+
+def test_normalize_recognizes_broadened_dosage_units() -> None:
+    """Apothecary/common units beyond mg/mcg/g/ml/iu/% (drops, grains, cc, etc.) must be
+    recognized so real-world handwritten prescriptions aren't misparsed as unitless."""
+    envelope = _envelope(("Atropine 2 gtt", 0.9))
+
+    [item] = normalize(envelope)
+
+    assert item.strength_value == 2.0
+    assert item.strength_unit == "gtt"
+
+
 @pytest.fixture
 def glycomet_item() -> MedicineEntity:
     return MedicineEntity(

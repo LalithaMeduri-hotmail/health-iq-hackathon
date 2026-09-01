@@ -11,15 +11,121 @@ from rapidfuzz import fuzz, process
 from app.config import get_settings
 from app.models.medicine import MedicineCorrection, MedicineEntity
 from app.repositories.sql_repo import list_catalog, search_medicine_sync
-from app.services.ocr import OcrEnvelope
+from app.services.ocr import OcrEnvelope, OcrLine
 
 FUZZY_ACCEPT_THRESHOLD = 88
 FUZZY_REVIEW_THRESHOLD = 75
 SOURCE_FRESHNESS_MONTHS = 24
 
-_STRENGTH_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(mg|mcg|g|ml|iu|%)", re.IGNORECASE)
+_STRENGTH_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*"
+    r"(mg|mcg|g|ml|iu|%|gr|dr|oz|tsp|tbsp|gtt|drops?|units?|tabs?|tablets?|caps?|capsules?|cc)\b",
+    re.IGNORECASE,
+)
 _FREQUENCY_RE = re.compile(r"\b(\d(?:[.\-]\d){1,3}|BD|OD|HS|SOS|TDS|QID|STAT)\b", re.IGNORECASE)
 _DURATION_RE = re.compile(r"(?:x\s*|for\s*)(\d+)\s*(day|days|week|weeks|month|months)\b", re.IGNORECASE)
+# Best-effort quantity when no recognized dosage unit is present (e.g. archaic apothecary
+# quantities OCR'd without a unit token, such as "Tr Belladonna 15"). Capped at 3 digits to avoid
+# matching years/form numbers/IDs.
+_QUANTITY_FALLBACK_RE = re.compile(r"\b(\d{1,3}(?:\.\d+)?)\b")
+
+# Section labels/administrative fields common on paper prescription forms (not medicine names) -
+# a brand candidate that reduces to exactly one of these is dropped rather than surfaced as a
+# bogus, unconfirmable "medicine".
+_NON_DRUG_LABELS = {
+    "rx",
+    "sig",
+    "sig:",
+    "seg",
+    "seg:",
+    "signa",
+    "subscription",
+    "superscription",
+    "inscription",
+    "for",
+    "date",
+    "exp date",
+    "lot no",
+    "mfgr",
+    "filled by",
+    "r number",
+    "medical facility",
+    "name",
+    "age",
+    "sex",
+    "ward",
+    "ward no",
+    "reg no",
+    "registration no",
+    "service no",
+    "unit no",
+    "rank",
+    "page",
+    "hospital",
+    "address",
+    "patient",
+    "physician",
+    "prescriber",
+}
+
+
+def _bbox_y_range(bbox: list[float]) -> tuple[float, float]:
+    ys = bbox[1::2]
+    return (min(ys), max(ys)) if ys else (0.0, 0.0)
+
+
+def _bbox_x_left(bbox: list[float]) -> float:
+    xs = bbox[0::2]
+    return min(xs) if xs else 0.0
+
+
+def _group_lines_into_logical_rows(lines: list[OcrLine]) -> list[OcrLine]:
+    """Reconstruct logical prescription lines from a columnar form layout.
+
+    Forms with a separate name column and quantity/strength column (e.g. `Inscription` /
+    `gm or ml` on a DD Form 1289-style prescription) make Document Intelligence emit the drug
+    name and its strength as two spatially-separate `OcrLine`s instead of one. Group lines whose
+    vertical (`y`) ranges overlap by more than half of the shorter line's height into a single
+    row, ordered left-to-right, before strength/brand parsing runs.
+    """
+    if not lines:
+        return []
+
+    ranges = [_bbox_y_range(line.bbox) for line in lines]
+    heights = [max(top - bottom, 1.0) for bottom, top in ranges]
+
+    parent = list(range(len(lines)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(i: int, j: int) -> None:
+        root_i, root_j = find(i), find(j)
+        if root_i != root_j:
+            parent[root_j] = root_i
+
+    for i in range(len(lines)):
+        bottom_i, top_i = ranges[i]
+        for j in range(i + 1, len(lines)):
+            bottom_j, top_j = ranges[j]
+            overlap = min(top_i, top_j) - max(bottom_i, bottom_j)
+            if overlap > 0.5 * min(heights[i], heights[j]):
+                union(i, j)
+
+    groups: dict[int, list[int]] = {}
+    for i in range(len(lines)):
+        groups.setdefault(find(i), []).append(i)
+
+    rows: list[OcrLine] = []
+    for indices in sorted(groups.values(), key=lambda idxs: min(ranges[i][0] for i in idxs)):
+        ordered = sorted(indices, key=lambda i: _bbox_x_left(lines[i].bbox))
+        merged_text = " ".join(lines[i].text for i in ordered).strip()
+        merged_confidence = min(lines[i].confidence for i in ordered)
+        rows.append(OcrLine(text=merged_text, confidence=merged_confidence, bbox=lines[ordered[0]].bbox))
+    return rows
 
 
 def _extract_strength(text: str) -> tuple[float | None, str | None, int | None]:
@@ -27,6 +133,13 @@ def _extract_strength(text: str) -> tuple[float | None, str | None, int | None]:
     if not match:
         return None, None, None
     return float(match.group(1)), match.group(2).lower(), match.start()
+
+
+def _extract_quantity_fallback(text: str) -> tuple[float | None, int | None]:
+    match = _QUANTITY_FALLBACK_RE.search(text)
+    if not match:
+        return None, None
+    return float(match.group(1)), match.start()
 
 
 def _extract_frequency(text: str) -> str | None:
@@ -52,18 +165,28 @@ def normalize(ocr: OcrEnvelope) -> list[MedicineEntity]:
     `needsUserConfirmation` set for anything below the accept threshold.
 
     Lines with no parseable strength token (patient/doctor header lines, dates, signatures) are
-    treated as non-medicine lines and skipped.
+    treated as non-medicine lines and skipped. Columnar forms that split a drug's name and its
+    strength/quantity into separate OCR lines are reconstructed first (`_group_lines_into_logical_rows`).
     """
     settings = get_settings()
     brand_names = sorted({row["brandName"] for row in list_catalog()})
+    logical_lines = _group_lines_into_logical_rows(ocr.lines)
 
     items: list[MedicineEntity] = []
-    for index, line in enumerate(ocr.lines):
+    for index, line in enumerate(logical_lines):
         strength_value, strength_unit, strength_start = _extract_strength(line.text)
         if strength_value is None:
+            # No recognized dosage unit (mg/ml/gtt/...) - fall back to a bare quantity so an
+            # unfamiliar/archaic drug name (not in the modern catalog) still surfaces for the
+            # user to confirm instead of silently vanishing from the results.
+            strength_value, strength_start = _extract_quantity_fallback(line.text)
+        if strength_value is None or strength_start is None:
             continue
 
         brand_candidate = _brand_candidate(line.text, strength_start)
+        if not brand_candidate or brand_candidate.strip(" :").casefold() in _NON_DRUG_LABELS:
+            continue
+
         best_match = process.extractOne(brand_candidate, brand_names, scorer=fuzz.token_set_ratio) if brand_names else None
         matched_brand, fuzzy_score = (best_match[0], best_match[1]) if best_match else (brand_candidate, 0.0)
 
@@ -79,6 +202,7 @@ def normalize(ocr: OcrEnvelope) -> list[MedicineEntity]:
             line.confidence < settings.ocr_confidence_threshold
             or fuzzy_score < FUZZY_ACCEPT_THRESHOLD
             or active_ingredient is None
+            or strength_unit is None
         )
 
         items.append(
