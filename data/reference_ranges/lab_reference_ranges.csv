@@ -1,1 +1,40 @@
 canonicalKey,sex,ageMin,ageMax,refLow,refHigh,unit,plainLanguage,sourceName,sourceUrl
+glucose_fasting,any,18,120,70,99,mg/dL,"Blood sugar measured after an overnight fast. Higher-than-typical values are often discussed alongside diet and activity habits.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+glucose_pp,any,18,120,70,140,mg/dL,"Blood sugar measured about two hours after a meal. It reflects how the body handles sugar from food.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+hba1c,any,18,120,4.0,5.6,%,"An average of blood sugar levels over roughly the past three months. It moves slowly, so trends matter more than single readings.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+hemoglobin,any,18,120,12.0,16.5,g/dL,"The protein in red blood cells that carries oxygen around the body.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+hemoglobin,M,18,120,13.5,17.5,g/dL,"The protein in red blood cells that carries oxygen around the body.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+hemoglobin,F,18,120,12.0,15.5,g/dL,"The protein in red blood cells that carries oxygen around the body.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+ldl,any,18,120,0,99,mg/dL,"Often called the less favourable cholesterol. Lower values are generally considered more favourable.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+hdl,any,18,120,40,60,mg/dL,"Often called the more favourable cholesterol. Higher values are generally considered more favourable.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+triglycerides,any,18,120,0,149,mg/dL,"A type of fat carried in the blood, commonly influenced by diet and activity.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+total_cholesterol,any,18,120,0,199,mg/dL,"The combined measure of cholesterol carried in the blood.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+creatinine,any,18,120,0.6,1.3,mg/dL,"A waste product filtered by the kidneys, commonly used to look at kidney function.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+urea,any,18,120,7,20,mg/dL,"Another waste product cleared by the kidneys, usually read together with creatinine.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+tsh,any,18,120,0.4,4.0,mIU/L,"A hormone signal from the brain to the thyroid gland. It is commonly reviewed together with thyroid hormone levels.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+sgpt_alt,any,18,120,7,56,U/L,"A liver enzyme. Values outside the typical band are commonly reviewed alongside other liver measures.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+sgot_ast,any,18,120,8,48,U/L,"A liver enzyme that is usually interpreted together with SGPT/ALT.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+vitamin_d,any,18,120,30,100,ng/mL,"A vitamin involved in bone health. Low values are common and are usually discussed with a clinician.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+vitamin_b12,any,18,120,200,900,pg/mL,"A vitamin involved in nerve function and red blood cell formation.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+wbc,any,18,120,4000,11000,cells/uL,"White blood cells, part of the body's defence system.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+platelets,any,18,120,150000,450000,cells/uL,"Cell fragments that help blood clot.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+hematocrit,any,18,120,36,50,%,"The share of blood made up of red blood cells.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+rbc_count,any,18,120,4.2,5.9,million/uL,"The number of red blood cells carrying oxygen.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+mcv,any,18,120,80,100,fL,"The average size of a red blood cell.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+mch,any,18,120,27,33,pg,"The average amount of hemoglobin inside a red blood cell.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+mchc,any,18,120,32,36,g/dL,"How concentrated the hemoglobin is inside red blood cells.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+rdw,any,18,120,11.5,14.5,%,"How much red blood cell size varies.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+esr,any,18,120,0,20,mm/hr,"How quickly red blood cells settle, a general marker of inflammation.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+uric_acid,any,18,120,3.5,7.2,mg/dL,"A waste product from the breakdown of purines in food and cells.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+bilirubin_total,any,18,120,0.2,1.2,mg/dL,"A pigment produced when red blood cells are recycled, cleared by the liver.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+alkaline_phosphatase,any,18,120,44,147,U/L,"An enzyme found in liver and bone.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+albumin,any,18,120,3.5,5.5,g/dL,"The main protein in blood, made by the liver.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+protein_total,any,18,120,6.0,8.3,g/dL,"All proteins carried in the blood together.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+sodium,any,18,120,135,145,mmol/L,"A mineral that helps balance fluid in the body.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+potassium,any,18,120,3.5,5.1,mmol/L,"A mineral involved in nerve and muscle function.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+chloride,any,18,120,98,107,mmol/L,"A mineral that works with sodium to balance body fluid.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+calcium,any,18,120,8.6,10.3,mg/dL,"A mineral important for bones, nerves and muscles.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+ferritin,any,18,120,13,300,ng/mL,"A measure of the iron stored in the body.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+iron,any,18,120,60,170,ug/dL,"The iron circulating in the blood.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+magnesium,any,18,120,1.6,2.6,mg/dL,"A mineral involved in muscle, nerve and energy function.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/
+zinc,any,18,120,70,120,ug/dL,"A mineral involved in immune function and healing.",MedlinePlus Lab Tests (demo seed),https://medlineplus.gov/lab-tests/

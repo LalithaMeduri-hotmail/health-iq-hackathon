@@ -11,7 +11,7 @@ user-facing payload.
 from dataclasses import dataclass
 from typing import Any
 
-from app.agents import prescription_agent, safety_agent
+from app.agents import comparison_agent, prescription_agent, report_agent, safety_agent
 
 
 @dataclass(frozen=True)
@@ -30,6 +30,10 @@ async def run(feature: str, payload: dict) -> AgentResult:
     """
     if feature == "prescription":
         draft = await prescription_agent.run(payload)
+    elif feature == "report":
+        draft = await report_agent.run(payload)
+    elif feature == "comparison":
+        draft = await comparison_agent.run(payload)
     else:
         raise NotImplementedError(f"Agent for feature {feature!r} is not implemented yet")
 
