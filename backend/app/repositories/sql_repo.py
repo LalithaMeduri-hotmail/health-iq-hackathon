@@ -20,6 +20,12 @@ from app.config import get_settings
 from app.models.report import TrendPoint
 
 _CATALOG_CSV_PATH = Path(__file__).resolve().parents[3] / "data" / "medicines" / "medicine_catalog.csv"
+_DEMO_SHARE_LINKS: dict[str, dict] = {}
+
+
+def _use_demo_store() -> bool:
+    settings = get_settings()
+    return settings.demo_mode or not settings.azure_sql_server_fqdn
 
 
 @lru_cache
@@ -76,9 +82,44 @@ async def search_medicine(active_ingredient: str, strength_value: float, strengt
 
 
 async def get_trend(user_id: str, canonical_key: str) -> list[TrendPoint]:
-    """Longitudinal history for one lab parameter, scoped by `userId`."""
-    raise NotImplementedError
+    """Longitudinal history for one lab parameter, scoped by `userId`.
+
+    Demo/dev: derived from the same recorded report history the `reports` container serves, so
+    trend charts stay populated without a seeded `LabMetric` table. Real: TODO(D1) query
+    `LabMetric` over `IX_LabMetric_Trend(UserId, CanonicalKey, ReportDate)`.
+    """
+    settings = get_settings()
+    if not settings.demo_mode and settings.azure_sql_server_fqdn:
+        raise NotImplementedError(
+            "Live Azure SQL LabMetric reads are not wired yet; set DEMO_MODE=true or seed via "
+            "scripts/seed_sql.py and implement the pyodbc path here."
+        )
+
+    from app.repositories.cosmos_repo import list_reports
+
+    points = [
+        TrendPoint(reportDate=report.report_date, value=parameter.value)
+        for report in await list_reports(user_id)
+        for parameter in report.parameters
+        if parameter.canonical_key == canonical_key
+    ]
+    return sorted(points, key=lambda point: point.report_date)
 
 
 async def create_share_link(share_id_hash: str, blob_path: str, expires_at: str) -> None:
-    raise NotImplementedError
+    """Insert one `ShareLink` row. Only the SHA-256 hash of the token is ever stored."""
+    if _use_demo_store():
+        _DEMO_SHARE_LINKS[share_id_hash] = {"blobPath": blob_path, "expiresAt": expires_at, "accessCount": 0}
+        return
+    raise NotImplementedError(
+        "Live Azure SQL ShareLink writes are not wired yet; set DEMO_MODE=true or implement the pyodbc path here."
+    )
+
+
+async def get_share_link(share_id_hash: str) -> dict | None:
+    """Look up one `ShareLink` row by token hash; returns `None` when the token is unknown."""
+    if _use_demo_store():
+        return _DEMO_SHARE_LINKS.get(share_id_hash)
+    raise NotImplementedError(
+        "Live Azure SQL ShareLink reads are not wired yet; set DEMO_MODE=true or implement the pyodbc path here."
+    )

@@ -1,14 +1,22 @@
 """Typed application settings, bound to Key Vault (docs/lld/8-low-level-design-cross-cutting-platform.md Section 7.4)."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
     """Environment/Key-Vault-backed configuration. Never hardcode endpoints, keys, or thresholds elsewhere."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # Absolute paths: the server runs from `backend/`, so a relative `.env` would miss the repo-root file.
+    model_config = SettingsConfigDict(
+        env_file=(_REPO_ROOT / ".env", _REPO_ROOT / "backend" / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     azure_tenant_id: str = ""
     azure_key_vault_uri: str = ""

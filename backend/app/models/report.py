@@ -5,7 +5,7 @@
 
 from pydantic import BaseModel, ConfigDict, Field
 
-Status = str  # "low" | "normal" | "high" | "critical_flag" (implementation-plan.md Section 2.4)
+Status = str  # "low" | "normal" | "high" | "critical_flag" | "unknown" (no reference range available)
 
 
 class LabParameter(BaseModel):
@@ -46,12 +46,88 @@ class ReportSummary(BaseModel):
     narrative: str
 
 
+class ReportAnalyzeResponse(BaseModel):
+    """`POST /api/v1/reports/analyze` response `data` (implementation-plan.md Section 5.1)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    report_id: str = Field(alias="reportId")
+    report_date: str = Field(alias="reportDate")
+    blob_path: str | None = Field(alias="blobPath", default=None)
+    parameters: list[LabParameter] = Field(default_factory=list)
+    abnormal: list[LabParameter] = Field(default_factory=list)
+    system_cards: list[SystemCard] = Field(alias="systemCards", default_factory=list)
+    health_score: float = Field(alias="healthScore")
+    narrative: str
+
+
+class StoredReport(BaseModel):
+    """A `reports` document as persisted in Cosmos (LLD Section 4.2), used as the comparison input."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    user_id: str = Field(alias="userId")
+    report_date: str = Field(alias="reportDate")
+    lab_name: str = Field(alias="labName", default="")
+    parameters: list[LabParameter] = Field(default_factory=list)
+
+
+class ReportListItem(BaseModel):
+    """Report-picker entry for the Report Comparison tab (FR3.1)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    report_id: str = Field(alias="reportId")
+    report_date: str = Field(alias="reportDate")
+    lab_name: str = Field(alias="labName", default="")
+    parameter_count: int = Field(alias="parameterCount")
+    abnormal_count: int = Field(alias="abnormalCount")
+
+
+class ReportListResponse(BaseModel):
+    """`GET /api/v1/reports` payload backing the two-report picker."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    reports: list[ReportListItem] = Field(default_factory=list)
+
+
+class ComparisonRequest(BaseModel):
+    """`POST /api/v1/reports/compare` body (LLD Section 3.3.1)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    old_report_id: str = Field(alias="oldReportId")
+    current_report_id: str = Field(alias="currentReportId")
+
+
+class PdfGenerateRequest(BaseModel):
+    """`POST /api/v1/pdf/generate` body (implementation-plan.md Section 5.1)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    run_id: str = Field(alias="runId")
+
+
+class PdfGenerateResponse(BaseModel):
+    """`POST /api/v1/pdf/generate` response `data`; `shareUrl` is the revocable public route."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    pdf_blob_url: str = Field(alias="pdfBlobUrl")
+    share_id: str = Field(alias="shareId")
+    share_url: str = Field(alias="shareUrl")
+    expires_at: str = Field(alias="expiresAt")
+
+
 class ChangedParameter(BaseModel):
     """One aligned parameter pair in a report comparison (LLD Section 3.3.1)."""
 
     model_config = ConfigDict(populate_by_name=True)
 
     canonical_key: str = Field(alias="canonicalKey")
+    display_name: str = Field(alias="displayName", default="")
     old: float | None = None
     current: float | None = None
     unit: str
@@ -73,6 +149,7 @@ class ComparisonResult(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
+    run_id: str = Field(alias="runId", default="")
     old_report_date: str = Field(alias="oldReportDate")
     current_report_date: str = Field(alias="currentReportDate")
     improved: list[ChangedParameter] = Field(default_factory=list)

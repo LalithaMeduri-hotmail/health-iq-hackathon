@@ -8,6 +8,10 @@ import type { ApiResponse, ProblemDetails } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
+export function absoluteApiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`;
+}
+
 export class ApiError extends Error {
   constructor(public problem: ProblemDetails) {
     super(problem.title);

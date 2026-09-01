@@ -14,11 +14,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.config import get_settings
-from app.errors import PayloadTooLargeError, UnsupportedMediaTypeError, ValidationError
+from app.errors import NotFoundError, PayloadTooLargeError, UnsupportedMediaTypeError, ValidationError
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf", ".heic"}
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 RAW_UPLOADS_CONTAINER = "raw-uploads"
+GENERATED_PDFS_CONTAINER = "generated-pdfs"
 
 _MAGIC_BYTE_CHECKS: dict[str, tuple[bytes, ...]] = {
     ".jpg": (b"\xff\xd8\xff",),
@@ -74,3 +75,42 @@ async def upload_raw(user_id: str, filename: str, content: bytes, *, consent_ver
     blob = container.get_blob_client(blob_name)
     await blob.upload_blob(content, overwrite=False, metadata=metadata)
     return f"{RAW_UPLOADS_CONTAINER}/{blob_name}"
+
+
+async def upload_generated_pdf(user_id: str, content: bytes) -> str:
+    """Store a generated doctor-review PDF in `generated-pdfs`; returns its blob path."""
+    yyyy_mm = datetime.now(UTC).strftime("%Y-%m")
+    blob_name = f"{user_id}/{yyyy_mm}/{uuid.uuid4().hex}.pdf"
+
+    settings = get_settings()
+    if settings.demo_mode or not settings.azure_storage_account_name:
+        target = _LOCAL_STORE_ROOT / GENERATED_PDFS_CONTAINER / blob_name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+        return f"{GENERATED_PDFS_CONTAINER}/{blob_name}"
+
+    from app.deps import get_blob_service_client
+
+    client = get_blob_service_client()
+    container = client.get_container_client(GENERATED_PDFS_CONTAINER)
+    await container.get_blob_client(blob_name).upload_blob(content, overwrite=False)
+    return f"{GENERATED_PDFS_CONTAINER}/{blob_name}"
+
+
+async def read_generated_pdf(blob_path: str) -> bytes:
+    """Read back a generated PDF by blob path (demo share serving; live paths use a SAS URL)."""
+    container_name, _, blob_name = blob_path.partition("/")
+
+    settings = get_settings()
+    if settings.demo_mode or not settings.azure_storage_account_name:
+        source = _LOCAL_STORE_ROOT / container_name / blob_name
+        if not source.exists():
+            raise NotFoundError("The shared document is no longer available")
+        return source.read_bytes()
+
+    from app.deps import get_blob_service_client
+
+    client = get_blob_service_client()
+    blob = client.get_container_client(container_name).get_blob_client(blob_name)
+    stream = await blob.download_blob()
+    return await stream.readall()

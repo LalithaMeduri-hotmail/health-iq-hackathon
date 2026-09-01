@@ -67,6 +67,12 @@ class NoSafeAlternativeError(DomainError):
     status = 422
 
 
+class NoComparableParametersError(DomainError):
+    type_slug = "no-comparable-parameters"
+    title = "No comparable parameters"
+    status = 422
+
+
 class SafetyViolationError(DomainError):
     type_slug = "safety-violation"
     title = "Safety review blocked this response"
