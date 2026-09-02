@@ -14,9 +14,6 @@ from app.errors import UpstreamTimeoutError, UpstreamUnavailableError
 _FIXTURE_DIR = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "ocr"
 _DEMO_FIXTURE_PATH = _FIXTURE_DIR / "sample_prescription.json"
 _DEMO_LAYOUT_FIXTURES = ("sample_lab_report_older.json", "sample_lab_report_newer.json")
-_FIXTURE_DIR = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "ocr"
-_DEMO_FIXTURE_PATH = _FIXTURE_DIR / "sample_prescription.json"
-_DEMO_LAYOUT_FIXTURES = ("sample_lab_report_older.json", "sample_lab_report_newer.json")
 _POLL_TIMEOUT_SECONDS = 60.0
 
 _demo_layout_calls = 0

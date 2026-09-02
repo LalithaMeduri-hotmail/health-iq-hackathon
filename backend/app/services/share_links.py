@@ -87,4 +87,6 @@ async def build_sas_url(blob_path: str) -> str:
         permission=BlobSasPermissions(read=True),
         expiry=expires_on,
     )
-    return f"{client.url}{container_name}/{blob_name}?{token}"
+    # The SDK builds the blob URL; string-joining the account URL drops or doubles the separator.
+    blob_url = client.get_blob_client(container=container_name, blob=blob_name).url
+    return f"{blob_url}?{token}"

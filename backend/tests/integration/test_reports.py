@@ -41,6 +41,16 @@ def test_list_reports_returns_demo_history_newest_first(client) -> None:
     assert reports[0]["parameterCount"] > 0
 
 
+def test_list_reports_does_not_count_unknown_status_as_abnormal(client) -> None:
+    """A parameter with no reference range is `unknown`, which is not the same as out of range."""
+    analyzed = _analyze(client).json()["data"]
+    listed = {r["reportId"]: r for r in client.get("/api/v1/reports").json()["data"]["reports"]}
+    expected = sum(1 for p in analyzed["parameters"] if p["status"] in {"low", "high", "critical_flag"})
+
+    assert listed[analyzed["reportId"]]["abnormalCount"] == expected
+    assert listed[analyzed["reportId"]]["abnormalCount"] == len(analyzed["abnormal"])
+
+
 def test_compare_classifies_each_bucket(client) -> None:
     response = _compare(client, "report-2026-03-10", "report-2026-06-14")
 

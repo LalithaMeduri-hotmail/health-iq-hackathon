@@ -5,7 +5,7 @@ Output: `ReportSummary`. Guardrails: use "possible concern"; never name a diseas
 """
 
 from app.errors import NotFoundError
-from app.models.report import LabParameter, ReportSummary, SystemCard
+from app.models.report import ABNORMAL_STATUSES, LabParameter, ReportSummary, SystemCard
 from app.services.reference_ranges import get_reference_range, get_source
 
 # Organ/system grouping for the Health Profile cards (LLD Section 2).
@@ -22,13 +22,11 @@ SYSTEM_GROUPS: dict[str, tuple[str, ...]] = {
 _ABNORMAL_PENALTY = 8.0
 _CRITICAL_PENALTY = 15.0
 _GROUNDED_NOTE_LIMIT = 3
-_ABNORMAL_STATUSES = frozenset({"low", "high", "critical_flag"})
 _OTHER_SYSTEM = "Other results"
 
 
 def _is_abnormal(parameter: LabParameter) -> bool:
-    """`unknown` means no range was available, which is not the same as out of range."""
-    return parameter.status in _ABNORMAL_STATUSES
+    return parameter.status in ABNORMAL_STATUSES
 
 
 def health_score(parameters: list[LabParameter]) -> float:

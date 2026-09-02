@@ -7,6 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 Status = str  # "low" | "normal" | "high" | "critical_flag" | "unknown" (no reference range available)
 
+# `unknown` means no range was available, which is not the same as out of range.
+ABNORMAL_STATUSES = frozenset({"low", "high", "critical_flag"})
+
 
 class LabParameter(BaseModel):
     """Normalized lab result (implementation-plan.md Section 2.4)."""

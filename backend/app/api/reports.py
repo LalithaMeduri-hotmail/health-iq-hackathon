@@ -14,6 +14,7 @@ from app.deps import CurrentUser, get_current_user
 from app.errors import NoComparableParametersError, ValidationError
 from app.models.common import ApiResponse, SafetyBlock
 from app.models.report import (
+    ABNORMAL_STATUSES,
     ComparisonRequest,
     ComparisonResult,
     ReportAnalyzeResponse,
@@ -128,7 +129,7 @@ async def list_reports(
             reportDate=report.report_date,
             labName=report.lab_name,
             parameterCount=len(report.parameters),
-            abnormalCount=sum(1 for parameter in report.parameters if parameter.status != "normal"),
+            abnormalCount=sum(1 for parameter in report.parameters if parameter.status in ABNORMAL_STATUSES),
         )
         for report in sorted(reports, key=lambda report: report.report_date, reverse=True)
     ]
