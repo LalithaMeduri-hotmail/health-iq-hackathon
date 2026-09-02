@@ -11,8 +11,12 @@ from pathlib import Path
 from app.config import get_settings
 from app.errors import UpstreamTimeoutError, UpstreamUnavailableError
 
-_DEMO_FIXTURE_PATH = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "ocr" / "sample_prescription.json"
+_FIXTURE_DIR = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "ocr"
+_DEMO_FIXTURE_PATH = _FIXTURE_DIR / "sample_prescription.json"
+_DEMO_LAYOUT_FIXTURES = ("sample_lab_report_older.json", "sample_lab_report_newer.json")
 _POLL_TIMEOUT_SECONDS = 60.0
+
+_demo_layout_calls = 0
 
 
 @dataclass(frozen=True)
@@ -32,23 +36,36 @@ class OcrEnvelope:
     handwritten_ratio: float
 
 
-def _load_demo_envelope() -> OcrEnvelope:
+def _load_demo_envelope(path: Path = _DEMO_FIXTURE_PATH) -> OcrEnvelope:
     """Replay a recorded OCR envelope (A2: `DEMO_MODE=true` avoids live-demo flakiness)."""
-    raw = json.loads(_DEMO_FIXTURE_PATH.read_text(encoding="utf-8"))
+    raw = json.loads(path.read_text(encoding="utf-8"))
     lines = [OcrLine(text=line["text"], confidence=line["confidence"], bbox=line["bbox"]) for line in raw["lines"]]
     return OcrEnvelope(
         pages=raw["pages"], lines=lines, tables=raw.get("tables", []), handwritten_ratio=raw["handwrittenRatio"]
     )
 
 
-async def _extract_read_live(file: bytes) -> OcrEnvelope:
-    """Real `prebuilt-read` call via Document Intelligence, polled with backoff to 60s."""
+def _demo_layout_envelope() -> OcrEnvelope:
+    """Replay the recorded lab-report fixtures in rotation.
+
+    Consecutive uploads therefore replay *different* reports, which keeps the two-report
+    comparison flow demonstrable without a live Document Intelligence resource.
+    """
+    global _demo_layout_calls
+    fixture = _DEMO_LAYOUT_FIXTURES[_demo_layout_calls % len(_DEMO_LAYOUT_FIXTURES)]
+    _demo_layout_calls += 1
+    return _load_demo_envelope(_FIXTURE_DIR / fixture)
+
+
+async def _extract_live(file: bytes, *, mode: str) -> OcrEnvelope:
+    """Real `prebuilt-read`/`prebuilt-layout` call via Document Intelligence, polled with backoff to 60s."""
     from app.deps import get_docintel_client
 
+    model_id = "prebuilt-layout" if mode == "layout" else "prebuilt-read"
     client = get_docintel_client()
     try:
         async with asyncio.timeout(_POLL_TIMEOUT_SECONDS):
-            poller = await client.begin_analyze_document("prebuilt-read", body=file, content_type="application/octet-stream")
+            poller = await client.begin_analyze_document(model_id, body=file, content_type="application/octet-stream")
             result = await poller.result()
     except TimeoutError as exc:
         raise UpstreamTimeoutError("Document Intelligence did not complete within 60s") from exc
@@ -59,6 +76,7 @@ async def _extract_read_live(file: bytes) -> OcrEnvelope:
     for page in result.pages or []:
         page_words = page.words or []
         for line in page.lines or []:
+            # Confidence lives on page words, not on the line itself.
             line_spans = [(span.offset, span.offset + span.length) for span in (line.spans or [])]
             word_confidences = [
                 word.confidence
@@ -92,7 +110,7 @@ async def extract(file: bytes, *, mode: str) -> OcrEnvelope:
     """
     settings = get_settings()
     if settings.demo_mode:
-        return _load_demo_envelope()
-    if mode == "read":
-        return await _extract_read_live(file)
-    raise NotImplementedError(f"OCR mode {mode!r} not yet implemented; only 'read' is wired for live calls")
+        return _demo_layout_envelope() if mode == "layout" else _load_demo_envelope()
+    if mode in ("read", "layout"):
+        return await _extract_live(file, mode=mode)
+    raise NotImplementedError(f"Unknown OCR mode {mode!r}; expected 'read' or 'layout'")
