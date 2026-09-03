@@ -37,13 +37,17 @@ Prerequisites: [`uv`](https://docs.astral.sh/uv/) (Python 3.11), Node.js 20+, an
 provisioned per the section below (`.env` filled in from `.env.example`).
 
 ```powershell
-cd backend; uv sync; cd ..
+cd backend; uv sync --extra dev; cd ..
 cd frontend; npm install; cd ..
 ./scripts/run_local.ps1   # starts uvicorn (:8000) and vite (:5173) together
 ```
 
-Or run each independently: `uv run --project backend uvicorn app.main:app --reload` and
+Or run each independently:
+`uv run --project backend --directory backend uvicorn app.main:app --reload --reload-dir app` and
 `npm --prefix frontend run dev`. Verify with `GET http://localhost:8000/health`.
+
+With `DEMO_MODE=true` (the `.env.example` default) the app runs entirely on cached fixtures, so no
+Azure resources are required to start the servers or run the test suite.
 
 ## Provisioning the infrastructure
 

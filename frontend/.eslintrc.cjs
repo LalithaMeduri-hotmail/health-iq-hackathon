@@ -13,5 +13,6 @@ module.exports = {
     'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
   },
-  ignorePatterns: ['dist', 'node_modules'],
+  // `vite.config.js` is a gitignored artifact emitted by `tsc -b`; linting it would fail on Node globals.
+  ignorePatterns: ['dist', 'node_modules', 'vite.config.js'],
 };

@@ -9,17 +9,20 @@ documents are kept in an in-process dict instead of Cosmos DB, so the analyze ->
 stays testable without deployed infra. Never log PHI content.
 """
 
+import hashlib
 import json
+from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 
 from app.config import get_settings
-from app.errors import ForbiddenError, NotFoundError
-from app.models.profile import Profile
+from app.errors import ConflictError, ForbiddenError, NotFoundError
+from app.models.profile import CONSENT_PURPOSES, Consent, Profile
 from app.models.report import StoredReport
 
 _DEMO_RUNS_STORE: dict[str, dict] = {}
 _DEMO_SAVED_REPORTS: dict[str, StoredReport] = {}
+_DEMO_PROFILES: dict[str, dict] = {}
 _DEMO_REPORTS_PATH = Path(__file__).resolve().parents[3] / "data" / "samples" / "demo_lab_reports.json"
 
 
@@ -49,8 +52,90 @@ def _reports_container():
     return database.get_container_client("reports")
 
 
+def _profiles_container():
+    from app.deps import get_cosmos_client
+
+    settings = get_settings()
+    database = get_cosmos_client().get_database_client(settings.azure_cosmos_database_name)
+    return database.get_container_client("profiles")
+
+
+def _demo_etag(document: dict) -> str:
+    """Content-derived stand-in for Cosmos `_etag`, so the demo store enforces the same concurrency."""
+    payload = {key: value for key, value in document.items() if key not in {"etag", "_etag"}}
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+
+
+def _to_profile(document: dict) -> Profile:
+    """Map a `profiles` document to the domain model, normalizing Cosmos `_etag` onto `etag`."""
+    return Profile.model_validate(
+        {**document, "etag": document.get("_etag") or document.get("etag")}
+    )
+
+
 async def get_profile(user_id: str) -> Profile:
-    raise NotImplementedError
+    """Read one profile, or return an empty default so a first-time user still has a profile.
+
+    Returning a default (rather than raising) keeps `GET /profile` a safe read for a brand-new
+    caller, per LLD Section 2.3.2.
+    """
+    if _use_demo_store():
+        document = _DEMO_PROFILES.get(user_id)
+    else:
+        try:
+            document = await _profiles_container().read_item(item=user_id, partition_key=user_id)
+        except Exception:  # noqa: BLE001 - SDK raises a generic CosmosResourceNotFoundError
+            document = None
+
+    if document is None:
+        return Profile(userId=user_id)
+    if document["userId"] != user_id:
+        raise ForbiddenError(f"Profile {user_id!r} does not belong to the caller")
+    return _to_profile(document)
+
+
+async def save_profile(profile: Profile, *, if_match: str | None = None) -> Profile:
+    """Upsert one profile under optimistic concurrency (LLD Section 2.3.3).
+
+    `if_match` is the caller-supplied `etag`; when present and stale the write is rejected with
+    `ConflictError` instead of silently overwriting a concurrent edit.
+    """
+    current = await get_profile(profile.user_id)
+    if if_match is not None and current.etag is not None and if_match != current.etag:
+        raise ConflictError("Profile was modified by another request; re-read it and retry")
+
+    document = profile.model_dump(by_alias=True, exclude={"etag"})
+    document["id"] = profile.user_id
+
+    if _use_demo_store():
+        document["etag"] = _demo_etag(document)
+        _DEMO_PROFILES[profile.user_id] = document
+        return _to_profile(document)
+
+    from azure.core import MatchConditions
+
+    kwargs = (
+        {"etag": if_match, "match_condition": MatchConditions.IfNotModified} if if_match else {}
+    )
+    saved = await _profiles_container().upsert_item(document, **kwargs)
+    return _to_profile(saved)
+
+
+async def record_report_analysis(user_id: str, report_id: str, consent_version: str) -> Profile:
+    """Stamp the accepted consent and point `latestSummaryId` at the newest analyzed report.
+
+    Both happen at the same moment in the analyze flow (LLD Section 2.11 steps 1 and 9), so they
+    share one read-modify-write instead of two.
+    """
+    profile = await get_profile(user_id)
+    profile.latest_summary_id = report_id
+    profile.consent = Consent(
+        version=consent_version,
+        acceptedAt=datetime.now(UTC).isoformat(),
+        purposes=list(CONSENT_PURPOSES),
+    )
+    return await save_profile(profile)
 
 
 async def save_report(report: StoredReport) -> StoredReport:
