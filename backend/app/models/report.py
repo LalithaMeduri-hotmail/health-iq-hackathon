@@ -49,6 +49,45 @@ class ReportSummary(BaseModel):
     narrative: str
 
 
+class ScorePenalty(BaseModel):
+    """One parameter's contribution to the health-score deduction."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    canonical_key: str = Field(alias="canonicalKey")
+    display_name: str = Field(alias="displayName")
+    status: Status
+    penalty: float
+
+
+class HealthScoreBreakdown(BaseModel):
+    """Why the score is what it is - the score is a pure function of these penalties (NFR2.5)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    base_score: float = Field(alias="baseScore")
+    penalties: list[ScorePenalty] = Field(default_factory=list)
+    total_penalty: float = Field(alias="totalPenalty")
+    health_score: float = Field(alias="healthScore")
+    method: str
+
+
+class ReportDetailResponse(BaseModel):
+    """`GET /api/v1/reports/{reportId}` response `data` - one stored report, fully expanded."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    report_id: str = Field(alias="reportId")
+    report_date: str = Field(alias="reportDate")
+    lab_name: str = Field(alias="labName", default="")
+    parameters: list[LabParameter] = Field(default_factory=list)
+    abnormal: list[LabParameter] = Field(default_factory=list)
+    system_cards: list[SystemCard] = Field(alias="systemCards", default_factory=list)
+    health_score: float = Field(alias="healthScore")
+    score_breakdown: HealthScoreBreakdown = Field(alias="scoreBreakdown")
+    narrative: str
+
+
 class ReportAnalyzeResponse(BaseModel):
     """`POST /api/v1/reports/analyze` response `data` (implementation-plan.md Section 5.1)."""
 

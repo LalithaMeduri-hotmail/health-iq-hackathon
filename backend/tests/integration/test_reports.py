@@ -90,6 +90,50 @@ def test_compare_returns_a_grounded_narrative(client) -> None:
     assert "narrative-unavailable" not in response.json()["safety"]["notes"]
 
 
+def test_get_report_detail_explains_the_health_score(client) -> None:
+    """Every deduction that produced the score is itemized (NFR2.5)."""
+    response = client.get("/api/v1/reports/report-2026-06-14")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    breakdown = data["scoreBreakdown"]
+
+    assert breakdown["baseScore"] == 100
+    assert breakdown["healthScore"] == data["healthScore"]
+    assert breakdown["baseScore"] - breakdown["totalPenalty"] == breakdown["healthScore"]
+    assert len(breakdown["penalties"]) == len(data["abnormal"])
+    assert {p["canonicalKey"] for p in breakdown["penalties"]} == {
+        p["canonicalKey"] for p in data["abnormal"]
+    }
+    assert all(p["penalty"] in {8, 15} for p in breakdown["penalties"])
+    assert "not a diagnosis" in breakdown["method"]
+
+
+def test_get_report_detail_returns_out_of_range_parameters(client) -> None:
+    data = client.get("/api/v1/reports/report-2026-06-14").json()["data"]
+
+    assert data["reportDate"] == "2026-06-14"
+    assert data["parameters"]
+    assert data["systemCards"]
+    assert all(p["status"] in {"low", "high", "critical_flag"} for p in data["abnormal"])
+    assert len(data["abnormal"]) < len(data["parameters"])
+
+
+def test_get_report_detail_unknown_report_returns_404(client) -> None:
+    response = client.get("/api/v1/reports/report-does-not-exist")
+
+    assert response.status_code == 404
+    assert response.json()["type"] == "https://healthiq/errors/resource-not-found"
+
+
+def test_get_report_detail_is_scoped_to_the_calling_user(client) -> None:
+    response = client.get(
+        "/api/v1/reports/report-2026-06-14", headers={"X-Demo-User-Id": "someone-else"}
+    )
+
+    assert response.status_code in {403, 404}
+
+
 def test_compare_rejects_identical_report_ids(client) -> None:
     response = _compare(client, "report-2026-06-14", "report-2026-06-14")
 

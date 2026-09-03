@@ -10,14 +10,17 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 
 from app.agents import orchestrator
+from app.agents.report_agent import score_breakdown
 from app.deps import CurrentUser, get_current_user
 from app.errors import NoComparableParametersError, ValidationError
 from app.models.common import ApiResponse, SafetyBlock
+from app.models.profile import CONSENT_VERSION
 from app.models.report import (
     ABNORMAL_STATUSES,
     ComparisonRequest,
     ComparisonResult,
     ReportAnalyzeResponse,
+    ReportDetailResponse,
     ReportListItem,
     ReportListResponse,
     StoredReport,
@@ -54,7 +57,10 @@ async def analyze(
 
     content = await file.read()
     blob_path = await blob.upload_raw(
-        current_user.user_id, file.filename or "report.pdf", content, consent_version="1.0"
+        current_user.user_id,
+        file.filename or "report.pdf",
+        content,
+        consent_version=CONSENT_VERSION,
     )
 
     envelope = await ocr_extract(content, mode="layout")
@@ -88,6 +94,11 @@ async def analyze(
             "createdAt": datetime.now(UTC).isoformat(),
         },
     )
+
+    # FR2.4: the snapshot lands in Cosmos, its per-parameter metrics in SQL `LabMetric` (the trend
+    # source Feature 3 reads), and the profile records consent plus the newest analysis.
+    await sql_repo.save_lab_metrics(current_user.user_id, report.id, parameters)
+    await cosmos_repo.record_report_analysis(current_user.user_id, report.id, CONSENT_VERSION)
 
     data = ReportAnalyzeResponse(
         reportId=report.id,
@@ -135,6 +146,35 @@ async def list_reports(
     ]
     safety = SafetyBlock(pass_=True, notes=[])
     return _envelope(request, safety, ReportListResponse(reports=items))
+
+
+@router.get("/{report_id}")
+async def get_report(
+    request: Request,
+    report_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> ApiResponse[ReportDetailResponse]:
+    """One stored report expanded: parameters, out-of-range flags, cards, and the score derivation."""
+    report = await cosmos_repo.get_report(current_user.user_id, report_id)
+
+    result = await orchestrator.run("report", {"parameters": report.parameters})
+    summary = result.data
+
+    data = ReportDetailResponse(
+        reportId=report.id,
+        reportDate=report.report_date,
+        labName=report.lab_name,
+        parameters=summary.parameters,
+        abnormal=summary.abnormal,
+        systemCards=summary.system_cards,
+        healthScore=summary.health_score,
+        scoreBreakdown=score_breakdown(report.parameters),
+        narrative=summary.narrative,
+    )
+    safety = SafetyBlock(
+        pass_=result.safety_pass, notes=list(result.safety_notes), reviewer_version="safety-1.0.0"
+    )
+    return _envelope(request, safety, data)
 
 
 @router.post("/compare")

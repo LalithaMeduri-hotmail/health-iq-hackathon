@@ -43,6 +43,14 @@ class NotFoundError(DomainError):
     status = 404
 
 
+class ConflictError(DomainError):
+    """Optimistic-concurrency failure: the caller's `etag` no longer matches the stored resource."""
+
+    type_slug = "conflict"
+    title = "Conflict"
+    status = 409
+
+
 class UnsupportedMediaTypeError(DomainError):
     type_slug = "unsupported-media-type"
     title = "Unsupported media type"

@@ -6,6 +6,7 @@ export { Card } from './Card';
 export { Badge } from './Badge';
 export type { BadgeTone } from './Badge';
 export { Input } from './Input';
+export { Combobox } from './Combobox';
 export { Modal } from './Modal';
 export { PageHeader } from './PageHeader';
 export { LoadingState } from './LoadingState';

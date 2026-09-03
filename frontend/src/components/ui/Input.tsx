@@ -1,6 +1,6 @@
 /** Accessible labeled text input with optional hint/error text. */
 
-import { useId } from 'react';
+import { forwardRef, useId } from 'react';
 import type { InputHTMLAttributes } from 'react';
 
 import styles from './FormField.module.css';
@@ -12,7 +12,11 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   hideLabel?: boolean;
 }
 
-export function Input({ label, hint, error, hideLabel, id, className, ...rest }: InputProps) {
+// forwardRef so form libraries (React Hook Form `register`) can attach their ref to the control.
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
+  { label, hint, error, hideLabel, id, className, ...rest },
+  ref,
+) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
 
@@ -23,6 +27,7 @@ export function Input({ label, hint, error, hideLabel, id, className, ...rest }:
       </label>
       <input
         id={inputId}
+        ref={ref}
         className={[styles.control, error ? styles.controlError : '', className].filter(Boolean).join(' ')}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
@@ -40,4 +45,4 @@ export function Input({ label, hint, error, hideLabel, id, className, ...rest }:
       )}
     </div>
   );
-}
+});
