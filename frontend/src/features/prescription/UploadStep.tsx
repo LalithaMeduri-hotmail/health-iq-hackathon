@@ -17,9 +17,15 @@ interface UploadStepProps {
 export function UploadStep({ onSubmit, isPending }: UploadStepProps) {
   const [file, setFile] = useState<File | null>(null);
   const [manualLines, setManualLines] = useState<string[]>(['']);
+  // Which path was submitted, so only that button shows the spinner.
+  const [submittedPath, setSubmittedPath] = useState<'file' | 'manual' | null>(null);
 
   const cleanedManualLines = manualLines.map((line) => line.trim()).filter(Boolean);
-  const canSubmit = Boolean(file) || cleanedManualLines.length > 0;
+
+  function submit(path: 'file' | 'manual') {
+    setSubmittedPath(path);
+    onSubmit(path === 'file' ? { file: file ?? undefined } : { manualMedicines: cleanedManualLines });
+  }
 
   return (
     <Card
@@ -36,6 +42,18 @@ export function UploadStep({ onSubmit, isPending }: UploadStepProps) {
         className="visually-hidden"
         onChange={(event) => setFile(event.target.files?.[0] ?? null)}
       />
+
+      <div className={styles.actions}>
+        <Button
+          type="button"
+          size="lg"
+          disabled={!file}
+          isLoading={isPending && submittedPath === 'file'}
+          onClick={() => submit('file')}
+        >
+          Analyze prescription
+        </Button>
+      </div>
 
       <div className={styles.divider}>or enter medicines manually</div>
 
@@ -63,11 +81,11 @@ export function UploadStep({ onSubmit, isPending }: UploadStepProps) {
         <Button
           type="button"
           size="lg"
-          disabled={!canSubmit}
-          isLoading={isPending}
-          onClick={() => onSubmit({ file: file ?? undefined, manualMedicines: cleanedManualLines })}
+          disabled={cleanedManualLines.length === 0}
+          isLoading={isPending && submittedPath === 'manual'}
+          onClick={() => submit('manual')}
         >
-          Analyze prescription
+          Find alternate medicines
         </Button>
       </div>
     </Card>

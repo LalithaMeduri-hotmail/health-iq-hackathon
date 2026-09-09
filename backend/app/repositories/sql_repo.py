@@ -22,6 +22,10 @@ from app.models.report import LabParameter, TrendPoint
 _CATALOG_CSV_PATH = Path(__file__).resolve().parents[3] / "data" / "medicines" / "medicine_catalog.csv"
 _DEMO_SHARE_LINKS: dict[str, dict] = {}
 
+# `DoctorReview` rows keyed by SHA-256 of the emailed token, mirroring the `ShareLink` pattern:
+# the raw token is never stored, so a database read cannot reconstruct an approval link.
+_DEMO_DOCTOR_REVIEWS: dict[str, dict] = {}
+
 # Demo `LabMetric` rows keyed by `(userId, canonicalKey, reportId)` so re-analyzing one report
 # replaces its metrics instead of duplicating trend points.
 _DEMO_LAB_METRICS: dict[tuple[str, str, str], TrendPoint] = {}
@@ -149,10 +153,22 @@ async def get_trend(user_id: str, canonical_key: str) -> list[TrendPoint]:
     return sorted(points, key=lambda point: point.report_date)
 
 
-async def create_share_link(share_id_hash: str, blob_path: str, expires_at: str) -> None:
+async def create_share_link(
+    share_id_hash: str, blob_path: str, expires_at: str, *, user_id: str, run_id: str, filename: str = ""
+) -> None:
     """Insert one `ShareLink` row. Only the SHA-256 hash of the token is ever stored."""
     if _use_demo_store():
-        _DEMO_SHARE_LINKS[share_id_hash] = {"blobPath": blob_path, "expiresAt": expires_at, "accessCount": 0}
+        _DEMO_SHARE_LINKS[share_id_hash] = {
+            "blobPath": blob_path,
+            "userId": user_id,
+            "runId": run_id,
+            "filename": filename,
+            "expiresAt": expires_at,
+            "revokedAt": None,
+            "accessCount": 0,
+            "lastAccessAt": None,
+            "lastAccessIpHash": None,
+        }
         return
     raise NotImplementedError(
         "Live Azure SQL ShareLink writes are not wired yet; set DEMO_MODE=true or implement the pyodbc path here."
@@ -162,7 +178,85 @@ async def create_share_link(share_id_hash: str, blob_path: str, expires_at: str)
 async def get_share_link(share_id_hash: str) -> dict | None:
     """Look up one `ShareLink` row by token hash; returns `None` when the token is unknown."""
     if _use_demo_store():
-        return _DEMO_SHARE_LINKS.get(share_id_hash)
+        record = _DEMO_SHARE_LINKS.get(share_id_hash)
+        return dict(record) if record is not None else None
     raise NotImplementedError(
         "Live Azure SQL ShareLink reads are not wired yet; set DEMO_MODE=true or implement the pyodbc path here."
     )
+
+
+async def record_share_access(share_id_hash: str, *, accessed_at: str, ip_hash: str) -> None:
+    """Persist one share-link access (LLD Section 5.4: `AccessCount++`, timestamp, `ipHash`)."""
+    if _use_demo_store():
+        record = _DEMO_SHARE_LINKS.get(share_id_hash)
+        if record is not None:
+            record["accessCount"] = record.get("accessCount", 0) + 1
+            record["lastAccessAt"] = accessed_at
+            record["lastAccessIpHash"] = ip_hash
+        return
+    raise NotImplementedError(
+        "Live Azure SQL ShareLink access logging is not wired yet; set DEMO_MODE=true or implement the pyodbc path here."
+    )
+
+
+async def revoke_share_link(share_id_hash: str, *, user_id: str, revoked_at: str) -> bool:
+    """Set `RevokedAt` on a link the caller owns. Returns `False` when the token is unknown."""
+    if _use_demo_store():
+        record = _DEMO_SHARE_LINKS.get(share_id_hash)
+        if record is None or record.get("userId") != user_id:
+            return False
+        record["revokedAt"] = revoked_at
+        return True
+    raise NotImplementedError(
+        "Live Azure SQL ShareLink revocation is not wired yet; set DEMO_MODE=true or implement the pyodbc path here."
+    )
+
+
+async def create_doctor_review(token_hash: str, record: dict) -> None:
+    """Insert one `DoctorReview` row, keyed by the SHA-256 of the emailed token."""
+    if _use_demo_store():
+        _DEMO_DOCTOR_REVIEWS[token_hash] = dict(record)
+        return
+    raise NotImplementedError(
+        "Live Azure SQL DoctorReview writes are not wired yet; set DEMO_MODE=true or implement the pyodbc path here."
+    )
+
+
+async def get_doctor_review(token_hash: str) -> dict | None:
+    """Look up one review by token hash; returns `None` when the token is unknown."""
+    if _use_demo_store():
+        record = _DEMO_DOCTOR_REVIEWS.get(token_hash)
+        return dict(record) if record is not None else None
+    raise NotImplementedError(
+        "Live Azure SQL DoctorReview reads are not wired yet; set DEMO_MODE=true or implement the pyodbc path here."
+    )
+
+
+async def record_doctor_decision(token_hash: str, *, status: str, notes: str, decided_at: str) -> bool:
+    """Persist the clinician's verdict. Returns `False` when the token is unknown."""
+    if _use_demo_store():
+        record = _DEMO_DOCTOR_REVIEWS.get(token_hash)
+        if record is None:
+            return False
+        record["status"] = status
+        record["notes"] = notes
+        record["decidedAt"] = decided_at
+        return True
+    raise NotImplementedError(
+        "Live Azure SQL DoctorReview writes are not wired yet; set DEMO_MODE=true or implement the pyodbc path here."
+    )
+
+
+async def list_doctor_reviews(user_id: str, run_id: str) -> list[dict]:
+    """Every review raised for one run, scoped by `userId`, oldest first."""
+    if _use_demo_store():
+        rows = [
+            dict(record)
+            for record in _DEMO_DOCTOR_REVIEWS.values()
+            if record.get("userId") == user_id and record.get("runId") == run_id
+        ]
+        return sorted(rows, key=lambda record: record["requestedAt"])
+    raise NotImplementedError(
+        "Live Azure SQL DoctorReview reads are not wired yet; set DEMO_MODE=true or implement the pyodbc path here."
+    )
+

@@ -51,6 +51,14 @@ class ConflictError(DomainError):
     status = 409
 
 
+class GoneError(DomainError):
+    """The resource existed but is no longer available: an expired or revoked share link."""
+
+    type_slug = "gone"
+    title = "Gone"
+    status = 410
+
+
 class UnsupportedMediaTypeError(DomainError):
     type_slug = "unsupported-media-type"
     title = "Unsupported media type"
@@ -66,6 +74,14 @@ class PayloadTooLargeError(DomainError):
 class LowConfidenceOcrError(DomainError):
     type_slug = "low-confidence-ocr"
     title = "OCR confidence below threshold"
+    status = 422
+
+
+class WrongDocumentTypeError(DomainError):
+    """The upload is a valid document, but for a different feature than the one called."""
+
+    type_slug = "wrong-document-type"
+    title = "Wrong document type"
     status = 422
 
 

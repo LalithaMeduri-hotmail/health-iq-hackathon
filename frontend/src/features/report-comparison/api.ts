@@ -8,7 +8,6 @@ import type { ApiResponse } from '@/lib/types';
 
 import type {
   ComparisonResult,
-  PdfGenerateResponse,
   ReportAnalyzeResponse,
   ReportListResponse,
 } from './types';
@@ -29,10 +28,6 @@ export async function compareReports(
   currentReportId: string,
 ): Promise<ApiResponse<ComparisonResult>> {
   return apiClient.post<ComparisonResult>('/api/v1/reports/compare', { oldReportId, currentReportId });
-}
-
-export async function generateSharePdf(runId: string): Promise<ApiResponse<PdfGenerateResponse>> {
-  return apiClient.post<PdfGenerateResponse>('/api/v1/pdf/generate', { runId });
 }
 
 export { ApiError };

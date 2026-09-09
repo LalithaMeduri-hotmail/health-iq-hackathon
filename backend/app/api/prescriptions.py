@@ -12,8 +12,9 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 
 from app.agents import orchestrator, safety_agent
+from app.config import get_settings
 from app.deps import CurrentUser, get_current_user
-from app.errors import LowConfidenceOcrError, ValidationError
+from app.errors import LowConfidenceOcrError, ValidationError, WrongDocumentTypeError
 from app.models.common import DISCLAIMER_TEXT, ApiResponse, SafetyBlock
 from app.models.medicine import (
     ManualMedicineInput,
@@ -23,7 +24,7 @@ from app.models.medicine import (
     PrescriptionConfirmResponse,
 )
 from app.repositories import cosmos_repo
-from app.services import blob
+from app.services import blob, document_type
 from app.services.normalize_medicine import apply_correction
 from app.services.ocr import OcrEnvelope, OcrLine
 from app.services.ocr import extract as ocr_extract
@@ -58,6 +59,7 @@ async def analyze(
         raise ValidationError("Provide a prescription file or at least one manual medicine entry")
 
     manual_lines: list[OcrLine] = []
+    unverified_type = False
     if manual_medicines:
         try:
             raw_entries = json.loads(manual_medicines)
@@ -75,6 +77,27 @@ async def analyze(
             current_user.user_id, file.filename or "upload", content, consent_version="1.0"
         )
         file_envelope = await ocr_extract(content, mode="read")
+
+        if file_envelope.was_read:
+            kind = document_type.classify(
+                document_type.text_of(
+                    [line.text for line in file_envelope.lines], file_envelope.tables
+                )
+            )
+            if kind != "prescription":
+                raise WrongDocumentTypeError(
+                    "This does not look like a prescription. Upload a prescription or tablet strip "
+                    "here, and use Report Comparison or Health Profile for a lab report."
+                )
+        elif not get_settings().demo_mode:
+            # Nothing read the bytes, so claiming this is a prescription would be a guess.
+            raise WrongDocumentTypeError(
+                "This upload could not be read, so we cannot confirm it is a prescription. "
+                "Upload a PDF, or enter the medicines manually."
+            )
+        else:
+            unverified_type = True
+
         file_lines = file_envelope.lines
         handwritten_ratio = file_envelope.handwritten_ratio
 
@@ -135,7 +158,10 @@ async def analyze(
         needsConfirmation=[],
         disclaimers=analysis.disclaimers,
     )
-    safety = SafetyBlock(pass_=result.safety_pass, notes=result.safety_notes, reviewer_version="safety-1.0.0")
+    notes = list(result.safety_notes)
+    if unverified_type:
+        notes.append("document-type-unverified")
+    safety = SafetyBlock(pass_=result.safety_pass, notes=notes, reviewer_version="safety-1.0.0")
     return _envelope(request, safety, data)
 
 

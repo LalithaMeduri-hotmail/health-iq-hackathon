@@ -29,6 +29,10 @@ _DURATION_RE = re.compile(r"(?:x\s*|for\s*)(\d+)\s*(day|days|week|weeks|month|mo
 # matching years/form numbers/IDs.
 _QUANTITY_FALLBACK_RE = re.compile(r"\b(\d{1,3}(?:\.\d+)?)\b")
 
+# A header date ("Date: 2026-09-01", "01/09/2026") otherwise parses as a strength and surfaces
+# as a bogus medicine the user is asked to confirm.
+_DATE_LINE_RE = re.compile(r"\b\d{4}-\d{1,2}-\d{1,2}\b|\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b")
+
 # Section labels/administrative fields common on paper prescription forms (not medicine names) -
 # a brand candidate that reduces to exactly one of these is dropped rather than surfaced as a
 # bogus, unconfirmable "medicine".
@@ -174,6 +178,9 @@ def normalize(ocr: OcrEnvelope) -> list[MedicineEntity]:
 
     items: list[MedicineEntity] = []
     for index, line in enumerate(logical_lines):
+        if _DATE_LINE_RE.search(line.text):
+            continue
+
         strength_value, strength_unit, strength_start = _extract_strength(line.text)
         if strength_value is None:
             # No recognized dosage unit (mg/ml/gtt/...) - fall back to a bare quantity so an
@@ -302,6 +309,9 @@ def apply_correction(item: MedicineEntity, correction: MedicineCorrection) -> Me
             "dosage_form": dosage_form,
             "active_ingredient": active_ingredient,
             "match_score": 1.0,
+            # The user retyped this line, so the OCR reading no longer governs it. Leaving the
+            # original low score here trips safety rule R5 on every corrected line.
+            "ocr_confidence": 1.0,
             "needs_user_confirmation": False,
         }
     )
