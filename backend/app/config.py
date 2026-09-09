@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     ocr_confidence_threshold: float = 0.75
     cors_allowed_origins: str = "http://localhost:5173,http://localhost:3000"
 
+    # Account module (username/mobile/email + PIN login). `jwt_secret` MUST be set via Key
+    # Vault/env in any non-local deployment - see services/security.py for the dev-only fallback.
+    jwt_secret: str = ""
+    jwt_expires_minutes: int = 60 * 24 * 7
+    pin_max_failed_attempts: int = 5
+    pin_lockout_minutes: int = 15
+
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]

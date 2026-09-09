@@ -8,7 +8,17 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import mealplan, medicines, pdf, prescriptions, profile, reports, share, specialists
+from app.api import (
+    auth,
+    mealplan,
+    medicines,
+    pdf,
+    prescriptions,
+    profile,
+    reports,
+    share,
+    specialists,
+)
 from app.config import get_settings
 from app.errors import DomainError
 from app.models.common import ProblemDetails
@@ -83,6 +93,7 @@ def create_app() -> FastAPI:
     app.include_router(share.router)
     app.include_router(profile.router)
     app.include_router(specialists.router)
+    app.include_router(auth.router)
 
     return app
 
