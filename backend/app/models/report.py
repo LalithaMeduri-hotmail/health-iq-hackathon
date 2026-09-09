@@ -150,6 +150,7 @@ class PdfGenerateRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     run_id: str = Field(alias="runId")
+    regenerate: bool = False
 
 
 class PdfGenerateResponse(BaseModel):

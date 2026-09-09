@@ -37,6 +37,17 @@ class Settings(BaseSettings):
     ocr_confidence_threshold: float = 0.75
     cors_allowed_origins: str = "http://localhost:5173,http://localhost:3000"
 
+    # Public origin the doctor's emailed approval link points back at.
+    public_api_base_url: str = "http://localhost:8000"
+
+    # An unset `smtp_host` keeps the mailer in preview mode: messages land in `.local-mail/`.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "HealthIQ <no-reply@healthiq.invalid>"
+    smtp_use_tls: bool = True
+    review_link_ttl_hours: int = 168
     # Account module (username/mobile/email + PIN login). `jwt_secret` MUST be set via Key
     # Vault/env in any non-local deployment - see services/security.py for the dev-only fallback.
     jwt_secret: str = ""

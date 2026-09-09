@@ -5,7 +5,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import { Badge, Card, LoadingState } from '@/components/ui';
+import { Badge, Button, Card, LoadingState } from '@/components/ui';
+import { DoctorPdfCard } from '@/features/share/DoctorPdfCard';
+import { DoctorReviewCard } from '@/features/share/DoctorReviewCard';
+import { fetchReviewStatus } from '@/features/share/api';
 
 import { fetchAlternatives } from './api';
 import styles from './prescription.module.css';
@@ -15,9 +18,10 @@ interface ResultsStepProps {
   runId: string;
   ocrConfidence: number;
   items: MedicineEntity[];
+  onStartOver: () => void;
 }
 
-function AlternativeCard({ alternative }: { alternative: AlternativeMedicine }) {
+function AlternativeCard({ alternative, isApproved }: { alternative: AlternativeMedicine; isApproved: boolean }) {
   return (
     <div className={styles.altCard}>
       <div className={styles.altHeadline}>
@@ -31,7 +35,11 @@ function AlternativeCard({ alternative }: { alternative: AlternativeMedicine }) 
         (estimated)
       </p>
       <div className={styles.altFooter}>
-        <Badge tone="warning">Doctor approval required before switching</Badge>
+        {isApproved ? (
+          <Badge tone="success">Approved by your doctor</Badge>
+        ) : (
+          <Badge tone="warning">Doctor approval required before switching</Badge>
+        )}
         <span className={styles.source}>
           Source: {alternative.source.sourceName} &middot; {alternative.source.sourceDate}
         </span>
@@ -40,7 +48,7 @@ function AlternativeCard({ alternative }: { alternative: AlternativeMedicine }) 
   );
 }
 
-function MedicineAlternatives({ item }: { item: MedicineEntity }) {
+function MedicineAlternatives({ item, isApproved }: { item: MedicineEntity; isApproved: boolean }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['medicine-alternatives', item.lineId, item.activeIngredient, item.strengthValue, item.dosageForm],
     queryFn: () => fetchAlternatives([item]),
@@ -63,21 +71,28 @@ function MedicineAlternatives({ item }: { item: MedicineEntity }) {
   return (
     <>
       {data.data.alternatives.map((alternative) => (
-        <AlternativeCard key={alternative.cheaper} alternative={alternative} />
+        <AlternativeCard key={alternative.cheaper} alternative={alternative} isApproved={isApproved} />
       ))}
     </>
   );
 }
 
-export function ResultsStep({ runId, ocrConfidence, items }: ResultsStepProps) {
+export function ResultsStep({ runId, ocrConfidence, items, onStartOver }: ResultsStepProps) {
+  const reviewQuery = useQuery({ queryKey: ['reviews', runId], queryFn: () => fetchReviewStatus(runId) });
+  const isApproved = reviewQuery.data?.data.approved ?? false;
+
   return (
     <div>
-      <Card className={styles.resultHeader}>
-        <h2>Your medicines</h2>
-        <p className={styles.resultMeta}>
-          Run {runId} &middot; OCR confidence {(ocrConfidence * 100).toFixed(0)}%
-        </p>
-      </Card>
+      <Card
+        className={styles.resultHeader}
+        title="Your medicines"
+        subtitle={`OCR confidence ${(ocrConfidence * 100).toFixed(0)}%`}
+        actions={
+          <Button variant="secondary" size="sm" onClick={onStartOver}>
+            Analyze another prescription
+          </Button>
+        }
+      />
 
       {items.map((item) => (
         <Card key={item.lineId} className={styles.resultCard}>
@@ -88,9 +103,20 @@ export function ResultsStep({ runId, ocrConfidence, items }: ResultsStepProps) {
           <p className={styles.resultMeta}>
             {item.frequency ?? '-'} &middot; {item.duration ?? '-'}
           </p>
-          <MedicineAlternatives item={item} />
+          <MedicineAlternatives item={item} isApproved={isApproved} />
         </Card>
       ))}
+
+      <div className={styles.shareBlock}>
+        <DoctorReviewCard runId={runId} />
+      </div>
+
+      <div className={styles.shareBlock}>
+        <DoctorPdfCard
+          runId={runId}
+          subtitle="Download the review PDF, or send a 24-hour link to a doctor outside Health IQ."
+        />
+      </div>
     </div>
   );
 }

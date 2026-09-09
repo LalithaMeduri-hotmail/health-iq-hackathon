@@ -1,6 +1,8 @@
 /**
- * Prescription Analyzer feature root - upload -> confirm (if needed) -> alternatives flow
- * (FR1.1-FR1.8). Consent is gated globally by `components/ConsentModal` before this renders.
+ * Prescription Analyzer feature root - upload -> confirm -> alternatives flow (FR1.1-FR1.8).
+ * Confirmation is unconditional: a clean digital PDF still gets checked by the user, because a
+ * high read confidence says the text was legible, not that it was the right medicine.
+ * Consent is gated globally by `components/ConsentModal` before this renders.
  */
 
 import { useState } from 'react';
@@ -13,8 +15,7 @@ import { analyzePrescription, confirmPrescription, parseLowConfidenceError } fro
 import { ConfirmStep } from './ConfirmStep';
 import styles from './prescription.module.css';
 import { ResultsStep } from './ResultsStep';
-import type { LowConfidenceConfirmation } from './api';
-import type { MedicineEntity } from './types';
+import type { MedicineCorrectionInput, MedicineEntity } from './types';
 import { UploadStep } from './UploadStep';
 
 type Step = 'upload' | 'confirm' | 'results';
@@ -23,6 +24,13 @@ interface ResultsState {
   runId: string;
   ocrConfidence: number;
   items: MedicineEntity[];
+}
+
+/** What the user verifies, plus the read confidence to carry into the results header. */
+interface ConfirmState {
+  runId: string;
+  items: MedicineEntity[];
+  ocrConfidence: number;
 }
 
 function averageConfidence(items: MedicineEntity[]): number {
@@ -35,7 +43,7 @@ function averageConfidence(items: MedicineEntity[]): number {
 
 export function PrescriptionAnalyzerFeature() {
   const [step, setStep] = useState<Step>('upload');
-  const [confirmation, setConfirmation] = useState<LowConfidenceConfirmation | null>(null);
+  const [confirmation, setConfirmation] = useState<ConfirmState | null>(null);
   const [results, setResults] = useState<ResultsState | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -43,18 +51,22 @@ export function PrescriptionAnalyzerFeature() {
     mutationFn: analyzePrescription,
     onSuccess: (response) => {
       setErrorMessage(null);
-      setResults({
+      setConfirmation({
         runId: response.data.runId,
-        ocrConfidence: response.data.ocrConfidence,
         items: response.data.items,
+        ocrConfidence: response.data.ocrConfidence,
       });
-      setStep('results');
+      setStep('confirm');
     },
     onError: (error: unknown) => {
       if (error instanceof ApiError) {
         const lowConfidence = parseLowConfidenceError(error);
         if (lowConfidence) {
-          setConfirmation(lowConfidence);
+          setConfirmation({
+            runId: lowConfidence.runId,
+            items: lowConfidence.items,
+            ocrConfidence: averageConfidence(lowConfidence.items),
+          });
           setErrorMessage(null);
           setStep('confirm');
           return;
@@ -67,18 +79,26 @@ export function PrescriptionAnalyzerFeature() {
   });
 
   const confirmMutation = useMutation({
-    mutationFn: (corrections: { lineId: string; brandName: string }[]) =>
-      confirmPrescription(confirmation!.runId, corrections),
-    onSuccess: (response) => {
+    mutationFn: ({ runId, corrections }: { runId: string; corrections: MedicineCorrectionInput[] }) =>
+      confirmPrescription(runId, corrections),
+    onSuccess: (response, variables) => {
       setResults({
-        runId: confirmation!.runId,
-        ocrConfidence: averageConfidence(response.data.items),
+        runId: variables.runId,
+        // The reader's own confidence, not the 1.0 the backend records once a line is confirmed.
+        ocrConfidence: confirmation?.ocrConfidence ?? averageConfidence(response.data.items),
         items: response.data.items,
       });
       setStep('results');
     },
     onError: () => setErrorMessage('Could not save your corrections. Please try again.'),
   });
+
+  function startOver() {
+    setConfirmation(null);
+    setResults(null);
+    setErrorMessage(null);
+    setStep('upload');
+  }
 
   return (
     <section aria-label="Prescription Analyzer">
@@ -90,9 +110,15 @@ export function PrescriptionAnalyzerFeature() {
       />
 
       <div className={styles.steps}>
-        <span className={styles.stepPill} data-active={step === 'upload'}>
+        <button
+          type="button"
+          className={styles.stepPill}
+          data-active={step === 'upload'}
+          onClick={startOver}
+          disabled={step === 'upload'}
+        >
           1. Upload
-        </span>
+        </button>
         <span className={styles.stepPill} data-active={step === 'confirm'}>
           2. Confirm
         </span>
@@ -110,13 +136,18 @@ export function PrescriptionAnalyzerFeature() {
       {step === 'confirm' && confirmation && (
         <ConfirmStep
           items={confirmation.items}
-          onSubmit={(corrections) => confirmMutation.mutate(corrections)}
+          onSubmit={(corrections) => confirmMutation.mutate({ runId: confirmation.runId, corrections })}
           isPending={confirmMutation.isPending}
         />
       )}
 
       {step === 'results' && results && (
-        <ResultsStep runId={results.runId} ocrConfidence={results.ocrConfidence} items={results.items} />
+        <ResultsStep
+          runId={results.runId}
+          ocrConfidence={results.ocrConfidence}
+          items={results.items}
+          onStartOver={startOver}
+        />
       )}
     </section>
   );

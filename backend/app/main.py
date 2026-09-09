@@ -16,6 +16,7 @@ from app.api import (
     prescriptions,
     profile,
     reports,
+    reviews,
     share,
     specialists,
 )
@@ -93,6 +94,7 @@ def create_app() -> FastAPI:
     app.include_router(share.router)
     app.include_router(profile.router)
     app.include_router(specialists.router)
+    app.include_router(reviews.router)
     app.include_router(auth.router)
 
     return app
