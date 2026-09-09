@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     smtp_from: str = "HealthIQ <no-reply@healthiq.invalid>"
     smtp_use_tls: bool = True
     review_link_ttl_hours: int = 168
+    # Account module (username/mobile/email + PIN login). `jwt_secret` MUST be set via Key
+    # Vault/env in any non-local deployment - see services/security.py for the dev-only fallback.
+    jwt_secret: str = ""
+    jwt_expires_minutes: int = 60 * 24 * 7
+    pin_max_failed_attempts: int = 5
+    pin_lockout_minutes: int = 15
 
     @property
     def cors_origins(self) -> list[str]:

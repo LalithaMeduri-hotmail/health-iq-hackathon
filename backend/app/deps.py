@@ -13,9 +13,14 @@ from functools import lru_cache
 from typing import Annotated
 
 from azure.identity.aio import DefaultAzureCredential
-from fastapi import Header
+from fastapi import Header, Request
 
 from app.config import Settings, get_settings
+from app.errors import UnauthenticatedError
+
+# Name of the HttpOnly session cookie set by `api/auth.py` on register/login. Kept here (not in
+# auth.py) so both the cookie writer and this reader agree on one name without a circular import.
+SESSION_COOKIE_NAME = "hiq_session"
 
 
 @dataclass(frozen=True)
@@ -25,14 +30,34 @@ class CurrentUser:
     user_id: str
 
 
-async def get_current_user(x_demo_user_id: Annotated[str | None, Header()] = None) -> CurrentUser:
-    """Local/demo stub trusting an `X-Demo-User-Id` header.
+async def get_current_user(
+    request: Request, x_demo_user_id: Annotated[str | None, Header()] = None
+) -> CurrentUser:
+    """Resolve the caller from the account-module session (cookie or bearer token).
 
-    TODO(D4): replace with Entra JWT validation (`oid` claim) before any non-demo use; see
-    docs/lld/1-low-level-design-overview.md Section 0 (auth flow) and cut-list item 1 in
-    docs/team-plan.md if Entra login is descoped for the demo.
+    Falls back to the `X-Demo-User-Id` header stub only when `DEMO_MODE=true` and no session is
+    present, so existing demo flows keep working without forcing a login. A present-but-invalid/
+    expired token is always rejected (never silently downgraded to the demo stub).
     """
-    return CurrentUser(user_id=x_demo_user_id or "demo-user")
+    settings = get_settings()
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[len("Bearer ") :]
+
+    if token:
+        from app.services.security import decode_session_token
+
+        user_id = decode_session_token(token)
+        if user_id is None:
+            raise UnauthenticatedError("Session expired or invalid; please sign in again")
+        return CurrentUser(user_id=user_id)
+
+    if settings.demo_mode:
+        return CurrentUser(user_id=x_demo_user_id or "demo-user")
+
+    raise UnauthenticatedError("Sign in required")
 
 
 @lru_cache

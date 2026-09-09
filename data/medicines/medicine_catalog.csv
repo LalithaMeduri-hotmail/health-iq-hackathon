@@ -23,3 +23,66 @@ Telsartan,Telmisartan,40,mg,tablet,Telmisartan,Zydus Cadila,49.90,NPPA,https://w
 Augmentin,Amoxicillin+Clavulanic acid,625,mg,tablet,Amoxicillin+Clavulanate,GSK,210.00,NPPA,https://www.nppaindia.nic.in,2026-04-01,true
 Clavam,Amoxicillin+Clavulanic acid,625,mg,tablet,Amoxicillin+Clavulanate,Alkem Labs,131.20,NPPA,https://www.nppaindia.nic.in,2026-04-01,true
 Moxikind-CV,Amoxicillin+Clavulanic acid,625,mg,tablet,Amoxicillin+Clavulanate,Mankind Pharma,118.60,NPPA,https://www.nppaindia.nic.in,2026-04-01,true
+Omez,Omeprazole,20,mg,tablet,Omeprazole,Dr Reddy's,45.00,NPPA,https://www.nppaindia.nic.in,2026-05-10,true
+Ocid,Omeprazole,20,mg,tablet,Omeprazole,Zydus Cadila,38.50,NPPA,https://www.nppaindia.nic.in,2026-05-10,true
+Omepraz,Omeprazole,20,mg,tablet,Omeprazole,Sun Pharma,32.00,NPPA,https://www.nppaindia.nic.in,2026-05-10,true
+Rablet,Rabeprazole,20,mg,tablet,Rabeprazole,Lupin,68.00,NPPA,https://www.nppaindia.nic.in,2026-05-10,true
+Razo,Rabeprazole,20,mg,tablet,Rabeprazole,Dr Reddy's,58.40,NPPA,https://www.nppaindia.nic.in,2026-05-10,true
+Rabium,Rabeprazole,20,mg,tablet,Rabeprazole,Cipla Ltd,49.90,NPPA,https://www.nppaindia.nic.in,2026-05-10,true
+Losar,Losartan,50,mg,tablet,Losartan,Unichem Labs,62.00,NPPA,https://www.nppaindia.nic.in,2026-05-15,true
+Repace,Losartan,50,mg,tablet,Losartan,Cipla Ltd,44.50,NPPA,https://www.nppaindia.nic.in,2026-05-15,true
+Covance,Losartan,50,mg,tablet,Losartan,Torrent Pharma,38.90,NPPA,https://www.nppaindia.nic.in,2026-05-15,true
+Betaloc,Metoprolol,25,mg,tablet,Metoprolol,AstraZeneca,55.00,NPPA,https://www.nppaindia.nic.in,2026-04-20,true
+Metolar,Metoprolol,25,mg,tablet,Metoprolol,Cipla Ltd,42.00,NPPA,https://www.nppaindia.nic.in,2026-04-20,true
+Starpres,Metoprolol,25,mg,tablet,Metoprolol,Sun Pharma,36.50,NPPA,https://www.nppaindia.nic.in,2026-04-20,true
+Eltroxin,Levothyroxine,50,mcg,tablet,Levothyroxine,GSK,90.00,NPPA,https://www.nppaindia.nic.in,2026-03-05,true
+Thyronorm,Levothyroxine,50,mcg,tablet,Levothyroxine,Abbott,78.00,NPPA,https://www.nppaindia.nic.in,2026-03-05,true
+Thyrox,Levothyroxine,50,mcg,tablet,Levothyroxine,Macleods Pharma,55.00,NPPA,https://www.nppaindia.nic.in,2026-03-05,true
+Cetzine,Cetirizine,10,mg,tablet,Cetirizine,GSK,18.00,NPPA,https://www.nppaindia.nic.in,2026-02-15,true
+Alerid,Cetirizine,10,mg,tablet,Cetirizine,Cipla Ltd,14.50,NPPA,https://www.nppaindia.nic.in,2026-02-15,true
+Zyncet,Cetirizine,10,mg,tablet,Cetirizine,Mankind Pharma,12.90,NPPA,https://www.nppaindia.nic.in,2026-02-15,true
+Levocet,Levocetirizine,5,mg,tablet,Levocetirizine,Glenmark,24.00,NPPA,https://www.nppaindia.nic.in,2026-02-15,true
+Xyzal,Levocetirizine,5,mg,tablet,Levocetirizine,UCB,55.00,NPPA,https://www.nppaindia.nic.in,2026-02-15,true
+LCZ,Levocetirizine,5,mg,tablet,Levocetirizine,Micro Labs,20.00,NPPA,https://www.nppaindia.nic.in,2026-02-15,true
+Domstal,Domperidone,10,mg,tablet,Domperidone,Torrent Pharma,32.00,NPPA,https://www.nppaindia.nic.in,2026-01-25,true
+Vomistop,Domperidone,10,mg,tablet,Domperidone,Alkem Labs,25.00,NPPA,https://www.nppaindia.nic.in,2026-01-25,true
+Domperi,Domperidone,10,mg,tablet,Domperidone,Cipla Ltd,22.50,NPPA,https://www.nppaindia.nic.in,2026-01-25,true
+Emeset,Ondansetron,4,mg,tablet,Ondansetron,Cipla Ltd,28.00,NPPA,https://www.nppaindia.nic.in,2026-01-25,true
+Vomikind,Ondansetron,4,mg,tablet,Ondansetron,Mankind Pharma,22.00,NPPA,https://www.nppaindia.nic.in,2026-01-25,true
+Ondem,Ondansetron,4,mg,tablet,Ondansetron,Alkem Labs,19.50,NPPA,https://www.nppaindia.nic.in,2026-01-25,true
+Brufen,Ibuprofen,400,mg,tablet,Ibuprofen,Abbott,30.00,NPPA,https://www.nppaindia.nic.in,2026-03-12,true
+Ibugesic,Ibuprofen,400,mg,tablet,Ibuprofen,Cipla Ltd,22.00,NPPA,https://www.nppaindia.nic.in,2026-03-12,true
+Ibunac,Ibuprofen,400,mg,tablet,Ibuprofen,Zydus Cadila,18.50,NPPA,https://www.nppaindia.nic.in,2026-03-12,true
+Voveran,Diclofenac,50,mg,tablet,Diclofenac,Novartis,35.00,NPPA,https://www.nppaindia.nic.in,2026-03-12,true
+Dynapar,Diclofenac,50,mg,tablet,Diclofenac,Troikaa Pharma,28.00,NPPA,https://www.nppaindia.nic.in,2026-03-12,true
+Diclomol,Diclofenac,50,mg,tablet,Diclofenac,Alkem Labs,22.00,NPPA,https://www.nppaindia.nic.in,2026-03-12,true
+Ecosprin,Aspirin,75,mg,tablet,Aspirin,USV Pvt Ltd,12.00,NPPA,https://www.nppaindia.nic.in,2026-04-08,true
+Loprin,Aspirin,75,mg,tablet,Aspirin,Micro Labs,9.50,NPPA,https://www.nppaindia.nic.in,2026-04-08,true
+Delisprin,Aspirin,75,mg,tablet,Aspirin,Wallace Pharma,8.90,NPPA,https://www.nppaindia.nic.in,2026-04-08,true
+Clopilet,Clopidogrel,75,mg,tablet,Clopidogrel,Sun Pharma,65.00,NPPA,https://www.nppaindia.nic.in,2026-04-08,true
+Deplatt,Clopidogrel,75,mg,tablet,Clopidogrel,Torrent Pharma,58.00,NPPA,https://www.nppaindia.nic.in,2026-04-08,true
+Noklot,Clopidogrel,75,mg,tablet,Clopidogrel,Alkem Labs,45.00,NPPA,https://www.nppaindia.nic.in,2026-04-08,true
+Rosuvas,Rosuvastatin,10,mg,tablet,Rosuvastatin,Sun Pharma,120.00,NPPA,https://www.nppaindia.nic.in,2026-06-01,true
+Rosufit,Rosuvastatin,10,mg,tablet,Rosuvastatin,Micro Labs,95.00,NPPA,https://www.nppaindia.nic.in,2026-06-01,true
+Rozavel,Rosuvastatin,10,mg,tablet,Rosuvastatin,Cipla Ltd,88.00,NPPA,https://www.nppaindia.nic.in,2026-06-01,true
+Amaryl,Glimepiride,2,mg,tablet,Glimepiride,Sanofi,85.00,NPPA,https://www.nppaindia.nic.in,2026-05-01,true
+Glimestar,Glimepiride,2,mg,tablet,Glimepiride,Mankind Pharma,62.00,NPPA,https://www.nppaindia.nic.in,2026-05-01,true
+Glimy,Glimepiride,2,mg,tablet,Glimepiride,USV Pvt Ltd,55.00,NPPA,https://www.nppaindia.nic.in,2026-05-01,true
+Montair,Montelukast,10,mg,tablet,Montelukast,Cipla Ltd,110.00,NPPA,https://www.nppaindia.nic.in,2026-02-01,true
+Montek,Montelukast,10,mg,tablet,Montelukast,Sun Pharma,98.00,NPPA,https://www.nppaindia.nic.in,2026-02-01,true
+Odimont,Montelukast,10,mg,tablet,Montelukast,Macleods Pharma,75.00,NPPA,https://www.nppaindia.nic.in,2026-02-01,true
+Ciplox,Ciprofloxacin,500,mg,tablet,Ciprofloxacin,Cipla Ltd,45.00,NPPA,https://www.nppaindia.nic.in,2026-02-10,true
+Cifran,Ciprofloxacin,500,mg,tablet,Ciprofloxacin,Sanofi,52.00,NPPA,https://www.nppaindia.nic.in,2026-02-10,true
+Ciprobid,Ciprofloxacin,500,mg,tablet,Ciprofloxacin,Zydus Cadila,38.00,NPPA,https://www.nppaindia.nic.in,2026-02-10,true
+Doxt,Doxycycline,100,mg,capsule,Doxycycline,Macleods Pharma,25.00,NPPA,https://www.nppaindia.nic.in,2026-02-10,true
+Microdox,Doxycycline,100,mg,capsule,Doxycycline,Micro Labs,20.00,NPPA,https://www.nppaindia.nic.in,2026-02-10,true
+Doxy1,Doxycycline,100,mg,capsule,Doxycycline,Cipla Ltd,18.50,NPPA,https://www.nppaindia.nic.in,2026-02-10,true
+Flagyl,Metronidazole,400,mg,tablet,Metronidazole,Sanofi,30.00,NPPA,https://www.nppaindia.nic.in,2026-02-10,true
+Metrogyl,Metronidazole,400,mg,tablet,Metronidazole,JB Chemicals,22.00,NPPA,https://www.nppaindia.nic.in,2026-02-10,true
+Aristogyl,Metronidazole,400,mg,tablet,Metronidazole,Aristo Pharma,18.00,NPPA,https://www.nppaindia.nic.in,2026-02-10,true
+Taxim-O,Cefixime,200,mg,tablet,Cefixime,Alkem Labs,95.00,NPPA,https://www.nppaindia.nic.in,2026-02-10,true
+Zifi,Cefixime,200,mg,tablet,Cefixime,FDC Ltd,88.00,NPPA,https://www.nppaindia.nic.in,2026-02-10,true
+Cefix,Cefixime,200,mg,tablet,Cefixime,Cipla Ltd,75.00,NPPA,https://www.nppaindia.nic.in,2026-02-10,true
+Calcirol,Cholecalciferol,60000,iu,capsule,Vitamin D3,Cadila Pharma,32.00,NPPA,https://www.nppaindia.nic.in,2026-01-05,true
+D-Rise,Cholecalciferol,60000,iu,capsule,Vitamin D3,Mankind Pharma,28.00,NPPA,https://www.nppaindia.nic.in,2026-01-05,true
+Uprise-D3,Cholecalciferol,60000,iu,capsule,Vitamin D3,USV Pvt Ltd,25.00,NPPA,https://www.nppaindia.nic.in,2026-01-05,true

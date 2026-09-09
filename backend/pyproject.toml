@@ -23,6 +23,8 @@ dependencies = [
   "rapidfuzz>=3.9",
   "azure-monitor-opentelemetry>=1.6",
   "pypdf>=6.16.2",
+  "bcrypt>=4.1",
+  "pyjwt>=2.9",
 ]
 
 [project.optional-dependencies]
