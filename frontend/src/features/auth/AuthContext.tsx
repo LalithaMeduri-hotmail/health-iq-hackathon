@@ -35,12 +35,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useMutation({
     mutationFn: loginAccount,
-    onSuccess: (response) => queryClient.setQueryData(['auth', 'me'], response),
+    onSuccess: (response) =>
+      queryClient.setQueryData(['auth', 'me'], { ...response, data: response.data.account }),
   });
 
   const registerMutation = useMutation({
     mutationFn: registerAccount,
-    onSuccess: (response) => queryClient.setQueryData(['auth', 'me'], response),
+    onSuccess: (response) =>
+      queryClient.setQueryData(['auth', 'me'], { ...response, data: response.data.account }),
   });
 
   const logoutMutation = useMutation({
