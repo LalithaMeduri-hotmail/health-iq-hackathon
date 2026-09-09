@@ -1,0 +1,49 @@
+.page {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-8, 2rem) var(--space-4, 1rem);
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 1rem);
+}
+
+.actions {
+  margin-top: var(--space-2, 0.5rem);
+}
+
+.switchLine {
+  margin-top: var(--space-4, 1rem);
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary, #667085);
+}
+
+.switchLine a {
+  color: var(--color-brand-600, #16794f);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.switchLine a:hover {
+  text-decoration: underline;
+}
+
+.formError {
+  color: var(--color-danger, #c0362c);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.hintText {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary, #667085);
+  margin: 0 0 var(--space-2, 0.5rem);
+}

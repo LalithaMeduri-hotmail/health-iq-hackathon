@@ -29,7 +29,7 @@ async function request<TData>(path: string, init?: RequestInit): Promise<ApiResp
     headers.set('X-Demo-User-Id', 'demo-user');
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers, credentials: 'include' });
 
   if (!response.ok) {
     const problem = (await response.json()) as ProblemDetails;
