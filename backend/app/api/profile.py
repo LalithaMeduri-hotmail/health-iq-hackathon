@@ -80,8 +80,6 @@ def _text(value: str | None, field: str) -> str | None:
 def _validated(body: PreferencesUpdate) -> Preferences:
     return Preferences(
         allergies=_tokens(body.allergies, "allergies"),
-        cuisine=_text(body.cuisine, "cuisine"),
-        budget=_text(body.budget, "budget"),
         goals=_tokens(body.goals, "goals"),
         location=_text(body.location, "location"),
     )
@@ -129,7 +127,7 @@ async def update_preferences(
     body: PreferencesUpdate,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> ApiResponse[Profile]:
-    """Full-resource PUT of `{ allergies[], cuisine, budget, goals[], location }` -> new profile.
+    """Full-resource PUT of `{ allergies[], goals[], location }` -> new profile.
 
     A supplied `etag` must match the stored profile; a stale one is rejected with `409 conflict`.
     """

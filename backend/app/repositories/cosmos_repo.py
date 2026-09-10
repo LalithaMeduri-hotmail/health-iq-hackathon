@@ -23,7 +23,27 @@ from app.models.report import StoredReport
 _DEMO_RUNS_STORE: dict[str, dict] = {}
 _DEMO_SAVED_REPORTS: dict[str, StoredReport] = {}
 _DEMO_PROFILES: dict[str, dict] = {}
+_DEMO_PROFILES_PATH = (
+    Path(__file__).resolve().parents[3] / "data" / "samples" / "demo_profiles.json"
+)
 _DEMO_REPORTS_PATH = Path(__file__).resolve().parents[3] / "data" / "samples" / "demo_lab_reports.json"
+
+
+@lru_cache
+def load_demo_profiles() -> dict[str, dict]:
+    """Synthetic demo profiles keyed by `userId`; in-memory writes override these baselines."""
+    raw = json.loads(_DEMO_PROFILES_PATH.read_text(encoding="utf-8"))
+    profiles = {
+        document["userId"]: document
+        for document in raw["profiles"]
+    }
+    for user_id, document in profiles.items():
+        if document["id"] != user_id:
+            raise ValueError(
+                f"Demo profile id {document['id']!r} must match userId {user_id!r}"
+            )
+        Profile.model_validate(document)
+    return profiles
 
 
 @lru_cache
@@ -81,7 +101,7 @@ async def get_profile(user_id: str) -> Profile:
     caller, per LLD Section 2.3.2.
     """
     if _use_demo_store():
-        document = _DEMO_PROFILES.get(user_id)
+        document = _DEMO_PROFILES.get(user_id) or load_demo_profiles().get(user_id)
     else:
         try:
             document = await _profiles_container().read_item(item=user_id, partition_key=user_id)

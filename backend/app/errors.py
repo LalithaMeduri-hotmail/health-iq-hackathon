@@ -75,6 +75,18 @@ class NoSafeAlternativeError(DomainError):
     status = 422
 
 
+class AllergenConflictError(DomainError):
+    type_slug = "allergen-conflict"
+    title = "Allergen conflict"
+    status = 422
+
+
+class NoGroundedGuidanceError(DomainError):
+    type_slug = "no-grounded-guidance"
+    title = "No grounded nutrition guidance"
+    status = 422
+
+
 class NoComparableParametersError(DomainError):
     type_slug = "no-comparable-parameters"
     title = "No comparable parameters"

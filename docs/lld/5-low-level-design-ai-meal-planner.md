@@ -29,7 +29,10 @@
 - A1: Nutrition rules curated in `data/nutrition/nutrition_rules.md` → `idx-nutrition`.
 - A2: Condition signals map from abnormal parameters (glucose/HbA1c, LDL/cholesterol, etc.).
 - A3: Plans are general guidance, not medical nutrition therapy.
-- A4: Allergen list is authoritative from profile preferences.
+- A4: The profile allergen list is authoritative. Request allergies may add restrictions but
+  cannot remove stored allergies.
+- A5: Cuisine and budget are transient meal-plan choices, not profile fields. The API defaults to
+  `cuisine=general`, `budget=medium`, and `days=3` when the caller omits them.
 
 ### Dependencies
 
@@ -39,7 +42,11 @@
 
 ### Component Diagram Description
 
-`api/mealplan.py` route `/meal-plan/generate` loads profile preferences + latest report condition signals, `MealPlannerAgent` calls tools `search_nutrition_rules` + `get_profile_preferences`, applies a deterministic allergen filter (Python) over candidate items, then LLM assembles the day plan; Safety review enforces allergen block + disclaimers.
+`api/mealplan.py` route `/meal-plan/generate` loads authoritative profile allergies and the
+selected report, applies the request's transient cuisine/budget/day choices, and invokes
+`MealPlannerAgent`. The agent retrieves shared nutrition rules and applies a deterministic
+allergen filter over candidate items. Safety review enforces the allergen block, citations,
+disclaimer, and prohibited nutrition-prescription language.
 
 ### Service Interactions
 
@@ -96,6 +103,11 @@ Request:
 }
 ```
 
+`preferences` is optional. Omitted values use `general` cuisine, `medium` budget, three days,
+and no additional allergies or goals. Stored profile allergies are always unioned with request
+allergies. The request never accepts `userId`, report contents, profile documents, or nutrition
+knowledge-base documents.
+
 Response `data`:
 
 ```json
@@ -129,7 +141,9 @@ Errors: `404 resource-not-found` (report), `422 allergen-conflict` (requested cu
 
 ## 4.4 Data Design
 
-- Reads `profiles.preferences` and latest `reports` summary; reads `idx-nutrition`.
+- Reads authoritative allergies from `profiles.preferences`, the selected `reports` summary, and
+  shared nutrition knowledge from local curated data (`DEMO_MODE=true`) or `idx-nutrition`.
+- Cuisine, budget, and day count are request-scoped and are not persisted to the profile.
 - No new persistence; optionally cache generated plan on `runs` for audit.
 - Retention inherits platform policy.
 

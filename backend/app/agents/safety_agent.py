@@ -8,25 +8,7 @@ safety reviewer itself errors.
 |------|-------|
 | R1 | Payload contains the standard disclaimer string |
 | R2 | Every medical/nutritional claim carries `sourceUrl` + `sourceDate` |
-| R3 | No banned phrases: "you have", "diagnosed with", "stop taking", "replace your", "cure", "guaranteed" |
-| R4 | Alternatives carry `doctorApprovalRequired=true` and `savingsEstimated=true` |
-| R5 | Confidence below threshold forces `needsUserConfirmation=true` |
-| R6 | No PHI leaked back into shareable artifacts beyond what consent permits |
-
-Violations of R3-R6 are hard failures: return the redacted payload plus a `safety` block.
-"""
-
-"""`SafetyReviewerAgent` - mandatory final stage on every user-facing payload. Owner: D3.
-
-Tools: `check_citations`, `check_disclaimers`, `check_prohibited_claims`. Output: `SafetyVerdict`.
-Run cheap deterministic checks (R1-R6) before any LLM classification turn; fail closed if the
-safety reviewer itself errors.
-
-| Rule | Check |
-|------|-------|
-| R1 | Payload contains the standard disclaimer string |
-| R2 | Every medical/nutritional claim carries `sourceUrl` + `sourceDate` |
-| R3 | No banned phrases: "you have", "diagnosed with", "stop taking", "replace your", "cure", "guaranteed" |
+| R3 | No diagnosis, medication-change, cure, dosing, or calorie-prescription language |
 | R4 | Alternatives carry `doctorApprovalRequired=true` and `savingsEstimated=true` |
 | R5 | Confidence below threshold forces `needsUserConfirmation=true` |
 | R6 | No PHI leaked back into shareable artifacts beyond what consent permits |
@@ -41,6 +23,7 @@ from typing import Any
 
 from app.config import get_settings
 from app.models.common import DISCLAIMER_TEXT
+from app.services.allergen_filter import allergens_in_text
 from app.services.deidentify import EMAIL_RE, PHONE_RE
 
 BANNED_PHRASES = (
@@ -77,6 +60,8 @@ def _check_r1_disclaimer(payload: dict) -> list[str]:
     disclaimers = payload.get("disclaimers")
     if disclaimers is not None and DISCLAIMER_TEXT not in disclaimers:
         return ["R1: missing standard disclaimer text in `disclaimers`"]
+    if "days" in payload and not payload.get("disclaimer"):
+        return ["R1: missing meal-plan disclaimer"]
     return []
 
 
@@ -85,7 +70,46 @@ def _check_r2_citations(payload: dict) -> list[str]:
     for alt in payload.get("alternatives", []) or []:
         source = alt.get("source") or {}
         if not source.get("sourceUrl") or not source.get("sourceDate"):
-            violations.append(f"R2: alternative {alt.get('original', '?')!r} missing sourceUrl/sourceDate")
+            violations.append(
+                f"R2: alternative {alt.get('original', '?')!r} "
+                "missing sourceUrl/sourceDate"
+            )
+    if "days" not in payload:
+        return violations
+    claims = [
+        meal
+        for day in payload.get("days", []) or []
+        for meal in day.get("meals", []) or []
+    ]
+    claims.extend(payload.get("rationale", []) or [])
+    for claim in claims:
+        source = claim.get("source") or {}
+        if not source.get("sourceUrl") or not source.get("sourceDate"):
+            violations.append("R2: meal-plan claim missing sourceUrl/sourceDate")
+    return violations
+
+
+def _check_meal_plan_allergens(payload: dict, allergens: list[str]) -> list[str]:
+    if not allergens or "days" not in payload:
+        return []
+    meal_text = " ".join(
+        " ".join([*(meal.get("items") or []), meal.get("notes", "")])
+        for day in payload.get("days", []) or []
+        for meal in day.get("meals", []) or []
+    )
+    leaked = allergens_in_text(meal_text, allergens)
+    return [f"R6: allergen {item!r} detected in meal plan" for item in leaked]
+
+
+def _check_meal_plan_prescriptions(payload: dict) -> list[str]:
+    if "days" not in payload:
+        return []
+    text = " ".join(_iter_strings(payload)).casefold()
+    violations = []
+    if re.search(r"\bsupplement\b.{0,30}\b\d+(?:\.\d+)?\s*(?:mg|mcg|g|iu)\b", text):
+        violations.append("R3: supplement dosing detected in meal plan")
+    if re.search(r"\b\d{3,4}\s*(?:kcal|calories?)\b", text):
+        violations.append("R3: calorie prescription detected in meal plan")
     return violations
 
 
@@ -103,9 +127,15 @@ def _check_r4_alternatives(payload: dict) -> list[str]:
     violations = []
     for alt in payload.get("alternatives", []) or []:
         if not alt.get("doctorApprovalRequired"):
-            violations.append(f"R4: alternative {alt.get('original', '?')!r} missing doctorApprovalRequired=true")
+            violations.append(
+                f"R4: alternative {alt.get('original', '?')!r} "
+                "missing doctorApprovalRequired=true"
+            )
         if not alt.get("savingsEstimated"):
-            violations.append(f"R4: alternative {alt.get('original', '?')!r} missing savingsEstimated=true")
+            violations.append(
+                f"R4: alternative {alt.get('original', '?')!r} "
+                "missing savingsEstimated=true"
+            )
     return violations
 
 
@@ -114,8 +144,15 @@ def _check_r5_confidence_gate(payload: dict) -> list[str]:
     violations = []
     for item in payload.get("items", []) or []:
         confidence = item.get("ocrConfidence")
-        if confidence is not None and confidence < threshold and not item.get("needsUserConfirmation"):
-            violations.append(f"R5: item {item.get('lineId', '?')!r} below confidence gate without needsUserConfirmation")
+        if (
+            confidence is not None
+            and confidence < threshold
+            and not item.get("needsUserConfirmation")
+        ):
+            violations.append(
+                f"R5: item {item.get('lineId', '?')!r} below confidence gate "
+                "without needsUserConfirmation"
+            )
     return violations
 
 
@@ -129,7 +166,7 @@ def _check_r6_phi(payload: dict) -> list[str]:
     return violations
 
 
-def review(payload: Any) -> SafetyVerdict:
+def review(payload: Any, *, allergens: list[str] | None = None) -> SafetyVerdict:
     """Run rules R1-R6 against `payload` and return the verdict.
 
     `payload` is the feature-specific `data` dict (already `.model_dump(by_alias=True)`-shaped).
@@ -137,18 +174,32 @@ def review(payload: Any) -> SafetyVerdict:
     """
     try:
         if not isinstance(payload, dict):
-            return SafetyVerdict(passed=False, violations=["safety reviewer requires a dict payload"], redacted_payload=None)
+            return SafetyVerdict(
+                passed=False,
+                violations=["safety reviewer requires a dict payload"],
+                redacted_payload=None,
+            )
 
         violations = [
             *_check_r1_disclaimer(payload),
             *_check_r2_citations(payload),
             *_check_r3_banned_phrases(payload),
+            *_check_meal_plan_prescriptions(payload),
             *_check_r4_alternatives(payload),
             *_check_r5_confidence_gate(payload),
             *_check_r6_phi(payload),
+            *_check_meal_plan_allergens(payload, allergens or []),
         ]
         passed = len(violations) == 0
         redacted_payload = payload if passed else copy.deepcopy(payload)
-        return SafetyVerdict(passed=passed, violations=violations, redacted_payload=redacted_payload)
+        return SafetyVerdict(
+            passed=passed,
+            violations=violations,
+            redacted_payload=redacted_payload,
+        )
     except Exception as exc:  # noqa: BLE001 - fail closed per module contract
-        return SafetyVerdict(passed=False, violations=[f"safety reviewer error (fail-closed): {exc}"], redacted_payload=None)
+        return SafetyVerdict(
+            passed=False,
+            violations=[f"safety reviewer error (fail-closed): {exc}"],
+            redacted_payload=None,
+        )
