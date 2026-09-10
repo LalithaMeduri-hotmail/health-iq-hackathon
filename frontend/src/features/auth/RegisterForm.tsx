@@ -70,7 +70,7 @@ export function RegisterForm() {
         email: values.email || undefined,
         pin: values.pin,
       });
-      navigate('/prescriptions', { replace: true });
+      navigate('/', { replace: true });
     } catch (error) {
       setFormError(registerErrorMessage(error));
     }

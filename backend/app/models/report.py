@@ -25,16 +25,23 @@ class LabParameter(BaseModel):
     status: Status
     report_date: str = Field(alias="reportDate")
     source_confidence: float = Field(alias="sourceConfidence")
+    # Plain-language description of what the parameter measures, from the seeded reference ranges.
+    meaning: str | None = None
 
 
 class SystemCard(BaseModel):
-    """Organ/system risk card shown on the Health Profile tab."""
+    """Organ/system risk card shown on the Health Profile tab.
+
+    `parameters` lists the canonical keys measured for this system, so a client can join a card to
+    its values and to the specialty category that covers them.
+    """
 
     model_config = ConfigDict(populate_by_name=True)
 
     system: str
     risk_level: str = Field(alias="riskLevel")
     summary: str
+    parameters: list[str] = Field(default_factory=list)
 
 
 class ReportSummary(BaseModel):

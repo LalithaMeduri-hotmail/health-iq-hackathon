@@ -74,6 +74,8 @@ export interface SpecialistCategory {
   whenToConsult: string;
   confidence: number;
   source: SourceRef;
+  /** The abnormal measurements that put this specialty forward. */
+  parameters: LabParameter[];
 }
 
 export interface SpecialistGuidance {
@@ -87,6 +89,8 @@ export interface SystemCard {
   system: string;
   riskLevel: string;
   summary: string;
+  /** Canonical keys measured for this system. */
+  parameters: string[];
 }
 
 export interface LabParameter {
@@ -99,6 +103,8 @@ export interface LabParameter {
   status: LabStatus;
   reportDate: string;
   sourceConfidence: number;
+  /** Plain-language description of what the parameter measures. */
+  meaning?: string | null;
 }
 
 export interface ReportAnalyzeResponse {

@@ -210,11 +210,20 @@
   }
 
   .navLinkMobile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
     color: var(--color-text-secondary);
     text-decoration: none;
     font-weight: var(--font-weight-medium);
     padding: var(--space-3);
     border-radius: var(--radius-md);
+  }
+
+  .navDescription {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-regular);
+    color: var(--color-text-secondary);
   }
 
   .navLinkMobile.navLinkActive {

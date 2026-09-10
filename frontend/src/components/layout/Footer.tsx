@@ -4,10 +4,10 @@ import logoUrl from '@/assets/logo-icon.png';
 import styles from './Footer.module.css';
 
 const PRODUCT_LINKS = [
-  { to: '/prescriptions', label: 'Prescription Analyzer' },
-  { to: '/profile', label: 'Health Profile' },
-  { to: '/comparison', label: 'Report Comparison' },
-  { to: '/meal-plan', label: 'Meal Planner' },
+  { to: '/profile', label: 'Health Report' },
+  { to: '/prescriptions', label: 'Prescription Check' },
+  { to: '/comparison', label: 'Report Trends' },
+  { to: '/meal-plan', label: 'Meal Plan' },
 ];
 
 const COMPANY_LINKS = ['About HealthIQ', 'Contact support', 'Privacy policy', 'Terms of use'];

@@ -58,14 +58,15 @@ def group_abnormal(abnormal: list[LabParameter]) -> dict[str, list[LabParameter]
     return groups
 
 
-def _category_for(group: str, matched_count: int) -> SpecialistCategory:
+def _category_for(group: str, parameters: list[LabParameter]) -> SpecialistCategory:
     mapping = get_mapping(group)
     return SpecialistCategory(
         specialtyCategory=mapping["specialtyCategory"],
         parameterGroup=group,
         whenToConsult=mapping["whenToConsult"],
-        confidence=confidence_for(matched_count),
+        confidence=confidence_for(len(parameters)),
         source=get_source(group),
+        parameters=parameters,
     )
 
 
@@ -75,10 +76,10 @@ def build_categories(abnormal: list[LabParameter]) -> list[SpecialistCategory]:
     A report with nothing abnormal still yields general-physician guidance (LLD Section 2.9).
     """
     if not abnormal:
-        return [_category_for(GENERAL_GROUP, 0)]
+        return [_category_for(GENERAL_GROUP, [])]
 
     categories = [
-        _category_for(group, len(parameters))
+        _category_for(group, parameters)
         for group, parameters in group_abnormal(abnormal).items()
     ]
     return sorted(categories, key=lambda category: (-category.confidence, category.parameter_group))

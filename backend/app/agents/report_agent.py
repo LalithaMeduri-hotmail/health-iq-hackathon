@@ -84,19 +84,35 @@ def build_system_cards(parameters: list[LabParameter]) -> list[SystemCard]:
             continue
         abnormal = [parameter for parameter in measured if _is_abnormal(parameter)]
         risk_level = "typical" if not abnormal else ("watch" if len(abnormal) == 1 else "discuss")
+        noun = "value" if len(measured) == 1 else "values"
         summary = (
-            f"All {len(measured)} value(s) sit inside the typical range."
+            f"All {len(measured)} {noun} sit inside the typical range."
             if not abnormal
-            else f"{len(abnormal)} of {len(measured)} value(s) sit outside the typical range: "
+            else f"{len(abnormal)} of {len(measured)} {noun} sit outside the typical range: "
             + ", ".join(f"{parameter.display_name} ({parameter.status})" for parameter in abnormal)
             + "."
         )
-        cards.append(SystemCard(system=system, riskLevel=risk_level, summary=summary))
+        cards.append(
+            SystemCard(
+                system=system,
+                riskLevel=risk_level,
+                summary=summary,
+                parameters=[parameter.canonical_key for parameter in measured],
+            )
+        )
     return cards
 
 
+def _with_meaning(parameter: LabParameter) -> LabParameter:
+    """Attach the seeded plain-language description so clients never invent their own wording."""
+    try:
+        reference = get_reference_range(parameter.canonical_key)
+    except NotFoundError:
+        return parameter
+    return parameter.model_copy(update={"meaning": reference["plainLanguage"]})
+
+
 def build_narrative(parameters: list[LabParameter], abnormal: list[LabParameter], score: float) -> str:
-    """Deterministic, source-grounded summary - every claim carries provenance (safety rule R2)."""
     sentences = [
         f"This report covers {len(parameters)} parameter(s); {len(abnormal)} sit outside the typical "
         f"range. Overall indicator score: {score}/100."
@@ -122,6 +138,7 @@ async def run(payload: dict) -> ReportSummary:
     All numbers (status, score, cards) stay deterministic; no LLM is required for this contract.
     """
     parameters: list[LabParameter] = payload["parameters"]
+    parameters = [_with_meaning(parameter) for parameter in parameters]
     abnormal = [parameter for parameter in parameters if _is_abnormal(parameter)]
     score = health_score(parameters)
 

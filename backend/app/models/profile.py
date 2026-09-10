@@ -6,6 +6,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.common import SourceRef
+from app.models.report import LabParameter
 
 # Consent purposes recorded on the profile (LLD Section 2.3.2).
 CONSENT_PURPOSES = ("ocr", "analysis", "pdf")
@@ -123,7 +124,11 @@ class DoctorLink(BaseModel):
 
 
 class SpecialistCategory(BaseModel):
-    """One suggested specialty category; `source` satisfies NFR2.2 and safety rule R2."""
+    """One suggested specialty category; `source` satisfies NFR2.2 and safety rule R2.
+
+    `parameters` carries the abnormal measurements that put this group forward, so the UI can show
+    the evidence next to the suggestion instead of asking the reader to correlate it themselves.
+    """
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -132,6 +137,7 @@ class SpecialistCategory(BaseModel):
     when_to_consult: str = Field(alias="whenToConsult")
     confidence: float
     source: SourceRef
+    parameters: list[LabParameter] = Field(default_factory=list)
 
 
 class SpecialistGuidance(BaseModel):
