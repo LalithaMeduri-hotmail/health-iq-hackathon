@@ -1,0 +1,4 @@
+doctorId,name,email,specialty,registrationNo,isDemoData
+doc-001,Dr. Debopriya Dutta,duttadebopriya3@gmail.com,General Physician,DEMO-GP-1001,true
+doc-002,Dr. A. Iyer,demo.diabetologist@example.invalid,Diabetologist,DEMO-DB-1002,true
+doc-003,Dr. S. Rao,demo.cardiologist@example.invalid,Cardiologist,DEMO-CD-1003,true

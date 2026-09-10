@@ -26,7 +26,11 @@ _DEMO_PROFILES: dict[str, dict] = {}
 _DEMO_PROFILES_PATH = (
     Path(__file__).resolve().parents[3] / "data" / "samples" / "demo_profiles.json"
 )
-_DEMO_REPORTS_PATH = Path(__file__).resolve().parents[3] / "data" / "samples" / "demo_lab_reports.json"
+_DEMO_ACCOUNTS: dict[str, dict] = {}
+_DEMO_ACCOUNT_INDEX: dict[str, str] = {}  # casefolded username/mobile/email -> userId
+_DEMO_REPORTS_PATH = (
+    Path(__file__).resolve().parents[3] / "data" / "samples" / "demo_lab_reports.json"
+)
 
 
 @lru_cache
@@ -56,7 +60,10 @@ def load_demo_reports() -> list[StoredReport]:
 
 def _demo_reports() -> list[StoredReport]:
     """Seeded history plus anything analyzed during this session."""
-    return sorted([*load_demo_reports(), *_DEMO_SAVED_REPORTS.values()], key=lambda report: report.report_date)
+    return sorted(
+        [*load_demo_reports(), *_DEMO_SAVED_REPORTS.values()],
+        key=lambda report: report.report_date,
+    )
 
 
 def _use_demo_store() -> bool:
@@ -81,7 +88,7 @@ def _profiles_container():
 
 
 def _demo_etag(document: dict) -> str:
-    """Content-derived stand-in for Cosmos `_etag`, so the demo store enforces the same concurrency."""
+    """Content-derived `_etag` stand-in that enforces demo-store concurrency."""
     payload = {key: value for key, value in document.items() if key not in {"etag", "_etag"}}
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
@@ -188,7 +195,10 @@ async def get_report(user_id: str, report_id: str) -> StoredReport:
         query = "SELECT * FROM c WHERE c.userId = @userId AND c.id = @reportId"
         documents = _reports_container().query_items(
             query=query,
-            parameters=[{"name": "@userId", "value": user_id}, {"name": "@reportId", "value": report_id}],
+            parameters=[
+                {"name": "@userId", "value": user_id},
+                {"name": "@reportId", "value": report_id},
+            ],
             partition_key=user_id,
         )
         report = next(
@@ -245,3 +255,66 @@ async def get_run(user_id: str, run_id: str) -> dict:
     if document["userId"] != user_id:
         raise ForbiddenError(f"Run {run_id!r} does not belong to the caller")
     return document
+
+
+def _accounts_container():
+    from app.deps import get_cosmos_client
+
+    settings = get_settings()
+    database = get_cosmos_client().get_database_client(settings.azure_cosmos_database_name)
+    return database.get_container_client("accounts")
+
+
+async def find_account_by_identifier(identifier: str) -> dict | None:
+    """Look up an account document by username, mobile, or email (case-insensitive).
+
+    Used only for pre-authentication lookups (register uniqueness check, login) - there is no
+    `userId` to scope by yet, so this is intentionally a cross-partition read at this small
+    (accounts) scale, not a pattern to replicate for PHI-bearing containers.
+    """
+    key = identifier.strip().casefold()
+    if _use_demo_store():
+        user_id = _DEMO_ACCOUNT_INDEX.get(key)
+        return _DEMO_ACCOUNTS.get(user_id) if user_id else None
+
+    query = "SELECT * FROM c WHERE c.usernameKey = @key OR c.mobileKey = @key OR c.emailKey = @key"
+    documents = _accounts_container().query_items(
+        query=query, parameters=[{"name": "@key", "value": key}], enable_cross_partition_query=True
+    )
+    async for document in documents:
+        return document
+    return None
+
+
+async def get_account(user_id: str) -> dict | None:
+    if _use_demo_store():
+        return _DEMO_ACCOUNTS.get(user_id)
+    try:
+        return await _accounts_container().read_item(item=user_id, partition_key=user_id)
+    except Exception:  # noqa: BLE001 - SDK raises a generic CosmosResourceNotFoundError
+        return None
+
+
+async def create_account(document: dict) -> None:
+    """Insert a brand-new account; caller must already have checked identifier uniqueness."""
+    if _use_demo_store():
+        user_id = document["id"]
+        _DEMO_ACCOUNTS[user_id] = document
+        index_keys = (
+            document.get("usernameKey"),
+            document.get("mobileKey"),
+            document.get("emailKey"),
+        )
+        for key in index_keys:
+            if key:
+                _DEMO_ACCOUNT_INDEX[key] = user_id
+        return
+    await _accounts_container().create_item(document)
+
+
+async def save_account(document: dict) -> None:
+    """Upsert an existing account (e.g. failed-PIN-attempt counters, lockout timestamp)."""
+    if _use_demo_store():
+        _DEMO_ACCOUNTS[document["id"]] = document
+        return
+    await _accounts_container().upsert_item(document)

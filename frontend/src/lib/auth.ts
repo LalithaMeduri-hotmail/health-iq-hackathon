@@ -1,16 +1,18 @@
 /**
- * MSAL configuration + token acquisition (frontend.instructions.md).
+ * Session token acquisition (frontend.instructions.md).
  *
- * Locally (VITE_DEMO_MODE=true) requests use a stub user header instead of a real Entra token -
- * see docs/team-plan.md cut-list item 1. Wire real MSAL login before any non-demo use.
+ * The account module (`features/auth/`) authenticates via username/mobile/email + PIN; the
+ * backend sets the session as an HttpOnly cookie (`api/auth.py`), which `apiClient.ts` sends via
+ * `credentials: 'include'`. Nothing here ever stores a token in JS-accessible storage - per
+ * frontend.instructions.md, secrets must never be persisted in `localStorage`/`sessionStorage`.
+ *
+ * Locally (VITE_DEMO_MODE=true), requests fall back to a stub user header when no session cookie
+ * is present, so the app is still usable without signing in - see `features/auth/`.
  */
 
 export const isDemoMode = import.meta.env.VITE_DEMO_MODE !== 'false';
 
-/** TODO(D4): replace with `PublicClientApplication` from `@azure/msal-browser` once Entra login is wired. */
+/** Always `null`: auth is carried by the HttpOnly session cookie, never a bearer token in JS. */
 export async function getAccessToken(): Promise<string | null> {
-  if (isDemoMode) {
-    return null;
-  }
-  throw new Error('MSAL login not yet implemented - see frontend/src/lib/auth.ts');
+  return null;
 }

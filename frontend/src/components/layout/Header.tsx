@@ -1,9 +1,10 @@
-/** Sticky app header - brand, primary nav (desktop + mobile), and the demo user chip. */
+/** Sticky app header - brand, primary nav (desktop + mobile), and the signed-in user chip. */
 
 import { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 
 import logoUrl from '@/assets/logo-icon.png';
+import { useAuth } from '@/features/auth';
 import styles from './Header.module.css';
 
 const NAV_ITEMS = [
@@ -12,6 +13,41 @@ const NAV_ITEMS = [
   { to: '/comparison', label: 'Report Comparison' },
   { to: '/meal-plan', label: 'Meal Planner' },
 ];
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return (parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? parts[0]?.[1] ?? '');
+}
+
+function AccountChip() {
+  const { account, isLoading, logout } = useAuth();
+
+  if (isLoading) {
+    return null;
+  }
+
+  if (!account) {
+    return (
+      <Link className={styles.signInLink} to="/login">
+        Sign in
+      </Link>
+    );
+  }
+
+  const label = account.displayName ?? account.username;
+
+  return (
+    <div className={styles.userChip} title={label}>
+      <span className={styles.avatar} aria-hidden="true">
+        {initials(label).toUpperCase()}
+      </span>
+      <span className={styles.userName}>{label}</span>
+      <button type="button" className={styles.signOutButton} onClick={() => void logout()}>
+        Sign out
+      </button>
+    </div>
+  );
+}
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -39,12 +75,7 @@ export function Header() {
         </nav>
 
         <div className={styles.rightSlot}>
-          <div className={styles.userChip} title="Demo mode - Entra sign-in not yet wired">
-            <span className={styles.avatar} aria-hidden="true">
-              DU
-            </span>
-            <span className={styles.userName}>Demo User</span>
-          </div>
+          <AccountChip />
 
           <button
             type="button"

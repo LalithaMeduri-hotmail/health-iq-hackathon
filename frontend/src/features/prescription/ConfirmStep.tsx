@@ -1,40 +1,46 @@
 /**
- * Step 2: confirmation grid for low-confidence OCR lines (`422 low-confidence-ocr`).
- * Forces user confirmation before alternatives are requested (frontend.instructions.md).
+ * Step 2: the confirmation grid. Every analyzed run passes through here - a clean digital PDF as
+ * much as a low-confidence photo - so nothing reaches the alternatives step without the user
+ * cross-checking the medicine list (frontend.instructions.md safety UX).
  */
 
 import { useState } from 'react';
 
 import { Badge, Button, Card, Input, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui';
 
-import type { MedicineEntity } from './types';
+import styles from './prescription.module.css';
+import type { MedicineCorrectionInput, MedicineEntity } from './types';
 
 interface ConfirmStepProps {
   items: MedicineEntity[];
-  onSubmit: (corrections: { lineId: string; brandName: string }[]) => void;
+  onSubmit: (corrections: MedicineCorrectionInput[]) => void;
   isPending: boolean;
 }
 
 export function ConfirmStep({ items, onSubmit, isPending }: ConfirmStepProps) {
-  const flagged = items.filter((item) => item.needsUserConfirmation);
-  const [corrections, setCorrections] = useState<Record<string, string>>(
-    Object.fromEntries(flagged.map((item) => [item.lineId, item.brandName ?? ''])),
+  const [names, setNames] = useState<Record<string, string>>(
+    Object.fromEntries(items.map((item) => [item.lineId, item.brandName ?? item.rawText])),
   );
 
-  const allFilled = flagged.every((item) => corrections[item.lineId]?.trim());
+  const unclearCount = items.filter((item) => item.needsUserConfirmation).length;
+  const allNamed = items.every((item) => names[item.lineId]?.trim());
 
   return (
     <Card
-      title="Please confirm these medicines"
-      subtitle="We could not read some lines with full confidence. Please confirm or correct the medicine name before we look for doctor-reviewable alternatives."
+      title="Check these medicines"
+      subtitle={
+        unclearCount > 0
+          ? `We could not read ${unclearCount} line(s) with full confidence. Correct anything that is wrong, then confirm - we only look for alternatives once you do.`
+          : 'Correct anything that is wrong, then confirm - we only look for alternatives once you do.'
+      }
     >
       <Table>
         <TableHead>
           <TableRow>
-            <TableHeaderCell>Line as read</TableHeaderCell>
-            <TableHeaderCell>Medicine</TableHeaderCell>
-            <TableHeaderCell>Strength</TableHeaderCell>
-            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell scope="col">Line as read</TableHeaderCell>
+            <TableHeaderCell scope="col">Medicine</TableHeaderCell>
+            <TableHeaderCell scope="col">Strength</TableHeaderCell>
+            <TableHeaderCell scope="col">Status</TableHeaderCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -42,16 +48,12 @@ export function ConfirmStep({ items, onSubmit, isPending }: ConfirmStepProps) {
             <TableRow key={item.lineId}>
               <TableCell>{item.rawText}</TableCell>
               <TableCell>
-                {item.needsUserConfirmation ? (
-                  <Input
-                    label={`Medicine name for ${item.lineId}`}
-                    hideLabel
-                    value={corrections[item.lineId] ?? ''}
-                    onChange={(event) => setCorrections({ ...corrections, [item.lineId]: event.target.value })}
-                  />
-                ) : (
-                  item.brandName
-                )}
+                <Input
+                  label={`Medicine name for ${item.rawText}`}
+                  hideLabel
+                  value={names[item.lineId] ?? ''}
+                  onChange={(event) => setNames({ ...names, [item.lineId]: event.target.value })}
+                />
               </TableCell>
               <TableCell>
                 {item.strengthValue ?? '?'} {item.strengthUnit ?? ''}
@@ -68,17 +70,17 @@ export function ConfirmStep({ items, onSubmit, isPending }: ConfirmStepProps) {
         </TableBody>
       </Table>
 
-      <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+      <div className={styles.actions}>
         <Button
           type="button"
           size="lg"
-          disabled={!allFilled}
+          disabled={!allNamed}
           isLoading={isPending}
           onClick={() =>
-            onSubmit(flagged.map((item) => ({ lineId: item.lineId, brandName: corrections[item.lineId] })))
+            onSubmit(items.map((item) => ({ lineId: item.lineId, brandName: names[item.lineId].trim() })))
           }
         >
-          Confirm & continue
+          Confirm &amp; find alternatives
         </Button>
       </div>
     </Card>

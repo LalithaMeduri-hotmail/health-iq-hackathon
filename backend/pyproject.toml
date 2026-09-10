@@ -22,9 +22,17 @@ dependencies = [
   "reportlab>=4.2",
   "rapidfuzz>=3.9",
   "azure-monitor-opentelemetry>=1.6",
+  "pypdf>=6.16.2",
+  "bcrypt>=4.1",
+  "pyjwt>=2.9",
 ]
 
 [project.optional-dependencies]
+# Local image OCR, so uploaded photos are read without an Azure Document Intelligence endpoint.
+# Also needs the Tesseract binary on PATH (Windows: https://github.com/UB-Mannheim/tesseract/wiki).
+ocr = [
+  "pytesseract>=0.3.10",
+]
 dev = [
   "ruff>=0.6",
   "pytest>=8.3",
@@ -35,6 +43,10 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[[tool.uv.index]]
+url = "https://packagefeedproxy.microsoft.io/pypi/simple/"
+default = true
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

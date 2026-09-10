@@ -75,10 +75,3 @@ export interface ReportAnalyzeResponse {
   healthScore: number;
   narrative: string;
 }
-
-export interface PdfGenerateResponse {
-  pdfBlobUrl: string;
-  shareId: string;
-  shareUrl: string;
-  expiresAt: string;
-}

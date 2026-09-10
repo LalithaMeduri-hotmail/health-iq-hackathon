@@ -1,0 +1,13 @@
+{
+  "_comment": "Recorded prebuilt-read envelope for the second demo prescription (DEMO_MODE replay). Paired with data/samples/documents/prescription-02-*.pdf and data/samples/photoes/prescription-photo-02.jpg. Synthetic data only.",
+  "pages": 1,
+  "handwrittenRatio": 0.08,
+  "tables": [],
+  "lines": [
+    { "text": "Dr. Meera Nair, MBBS MD", "confidence": 0.96, "bbox": [0, 0, 200, 20] },
+    { "text": "Patient: Kavya Menon", "confidence": 0.94, "bbox": [0, 24, 200, 44] },
+    { "text": "Pantocid 40mg 1-0-0 x14 days", "confidence": 0.93, "bbox": [0, 48, 220, 68] },
+    { "text": "Amlopres 5mg 0-0-1 x30 days", "confidence": 0.62, "bbox": [0, 72, 220, 92] },
+    { "text": "Glyciphage 500mg 1-0-1 x30 days", "confidence": 0.91, "bbox": [0, 96, 220, 116] }
+  ]
+}

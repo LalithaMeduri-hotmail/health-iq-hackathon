@@ -11,8 +11,9 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 
 from app.agents import orchestrator
 from app.agents.report_agent import score_breakdown
+from app.config import get_settings
 from app.deps import CurrentUser, get_current_user
-from app.errors import NoComparableParametersError, ValidationError
+from app.errors import NoComparableParametersError, ValidationError, WrongDocumentTypeError
 from app.models.common import ApiResponse, SafetyBlock
 from app.models.profile import CONSENT_VERSION
 from app.models.report import (
@@ -27,7 +28,7 @@ from app.models.report import (
     TrendPoint,
 )
 from app.repositories import cosmos_repo, sql_repo
-from app.services import blob
+from app.services import blob, document_type
 from app.services.normalize_lab import find_report_date
 from app.services.normalize_lab import normalize as normalize_lab
 from app.services.ocr import extract as ocr_extract
@@ -64,6 +65,26 @@ async def analyze(
     )
 
     envelope = await ocr_extract(content, mode="layout")
+    unverified_type = False
+
+    if envelope.was_read:
+        kind = document_type.classify(
+            document_type.text_of([line.text for line in envelope.lines], envelope.tables)
+        )
+        if kind != "lab_report":
+            raise WrongDocumentTypeError(
+                "This does not look like a lab report. Upload a lab report here, and use the "
+                "Prescription Analyzer for a prescription or tablet strip."
+            )
+    elif not get_settings().demo_mode:
+        # Nothing read the bytes, so claiming this is a lab report would be a guess.
+        raise WrongDocumentTypeError(
+            "This upload could not be read, so we cannot confirm it is a lab report. "
+            "Upload a PDF instead."
+        )
+    else:
+        unverified_type = True
+
     parameters = normalize_lab(envelope)
     if not parameters:
         raise ValidationError("No recognizable lab parameters were found in this document")
@@ -113,6 +134,8 @@ async def analyze(
     notes = list(result.safety_notes)
     if find_report_date(envelope) is None:
         notes.append("report-date-not-detected")
+    if unverified_type:
+        notes.append("document-type-unverified")
     safety = SafetyBlock(pass_=result.safety_pass, notes=notes, reviewer_version="safety-1.0.0")
     return _envelope(request, safety, data)
 

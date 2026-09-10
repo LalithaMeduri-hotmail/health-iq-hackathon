@@ -15,7 +15,7 @@ from app.errors import UpstreamUnavailableError, ValidationError
 from app.models.common import ApiResponse, SafetyBlock
 from app.models.report import ComparisonResult, PdfGenerateRequest, PdfGenerateResponse
 from app.repositories import cosmos_repo
-from app.services import blob, pdf_builder, share_links
+from app.services import blob, doctor_pdf, share_links
 
 router = APIRouter(prefix="/api/v1/pdf", tags=["pdf"])
 
@@ -28,21 +28,42 @@ async def generate(
 ) -> ApiResponse[PdfGenerateResponse]:
     """`{ runId }` -> a doctor-review PDF plus a revocable 24h share link."""
     run = await cosmos_repo.get_run(current_user.user_id, body.run_id)
-    if run.get("type") != "comparison" or "comparison" not in run:
-        raise ValidationError(f"Run {body.run_id!r} has no comparison result to render")
+    run_type = run.get("type")
 
-    result = ComparisonResult.model_validate(run["comparison"])
-    verdict = safety_agent.review(result.model_dump(by_alias=True))
+    if run_type == "comparison":
+        payload = ComparisonResult.model_validate(run["comparison"]).model_dump(by_alias=True)
+    elif run_type == "prescription":
+        payload = {"items": run.get("items", [])}
+    else:
+        raise ValidationError(f"Run {body.run_id!r} cannot be rendered as a doctor-review PDF")
+
+    verdict = safety_agent.review(payload)
     if not verdict.passed:
-        raise ValidationError("Safety review blocked this document", errors=[{"field": "safety", "issue": note} for note in verdict.violations])
+        raise ValidationError(
+            "Safety review blocked this document",
+            errors=[{"field": "safety", "issue": note} for note in verdict.violations],
+        )
 
-    try:
-        content = pdf_builder.build_comparison(result)
-    except ImportError as exc:  # ReportLab missing in this environment
-        raise UpstreamUnavailableError(f"PDF rendering is unavailable: {exc}") from exc
+    # Rendering is the expensive step, so an unchanged run reuses its stored PDF (LLD Section 5.8).
+    # The token itself is always minted fresh: only its hash is persisted, so it cannot be re-read.
+    blob_path = None if body.regenerate else run.get("pdfBlobPath")
+    if blob_path is None:
+        try:
+            filename, content = doctor_pdf.build_for_run(run)
+        except ImportError as exc:  # ReportLab missing in this environment
+            raise UpstreamUnavailableError(f"PDF rendering is unavailable: {exc}") from exc
 
-    blob_path = await blob.upload_generated_pdf(current_user.user_id, content)
-    share_id, expires_at = await share_links.create_share_link(blob_path)
+        blob_path = await blob.upload_generated_pdf(current_user.user_id, content)
+        run["pdfBlobPath"] = blob_path
+        run["pdfFilename"] = filename
+        await cosmos_repo.record_run(current_user.user_id, body.run_id, run)
+
+    share_id, expires_at = await share_links.create_share_link(
+        blob_path,
+        user_id=current_user.user_id,
+        run_id=body.run_id,
+        filename=run.get("pdfFilename", ""),
+    )
 
     await cosmos_repo.record_run(
         current_user.user_id,
@@ -69,3 +90,4 @@ async def generate(
         safety=SafetyBlock(pass_=True, notes=[], reviewer_version="safety-1.0.0"),
         data=data,
     )
+

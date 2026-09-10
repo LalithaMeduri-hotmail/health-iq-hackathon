@@ -11,12 +11,13 @@ import { TrendLineChart } from '@/components/Charts';
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader } from '@/components/ui';
 import { Button } from '@/components/ui';
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui';
-import { ApiError, absoluteApiUrl } from '@/lib/apiClient';
+import { DoctorPdfCard } from '@/features/share/DoctorPdfCard';
+import { ApiError } from '@/lib/apiClient';
 
-import { analyzeReport, compareReports, fetchReports, generateSharePdf } from './api';
+import { analyzeReport, compareReports, fetchReports } from './api';
 import styles from './report-comparison.module.css';
 import type { BadgeTone } from '@/components/ui';
-import type { ChangeBucket, ChangedParameter, ComparisonResult, PdfGenerateResponse } from './types';
+import type { ChangeBucket, ChangedParameter, ComparisonResult } from './types';
 
 type Source = 'history' | 'upload';
 
@@ -75,7 +76,6 @@ export function ReportComparisonFeature() {
   const [olderFile, setOlderFile] = useState<File | null>(null);
   const [newerFile, setNewerFile] = useState<File | null>(null);
   const [result, setResult] = useState<ComparisonResult | null>(null);
-  const [share, setShare] = useState<PdfGenerateResponse | null>(null);
   const [trendKey, setTrendKey] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
@@ -91,7 +91,6 @@ export function ReportComparisonFeature() {
   function applyResult(comparison: ComparisonResult) {
     setErrorMessage(null);
     setNoticeMessage(null);
-    setShare(null);
     setResult(comparison);
     setTrendKey(Object.keys(comparison.trendSeries)[0] ?? null);
   }
@@ -126,14 +125,6 @@ export function ReportComparisonFeature() {
       void queryClient.invalidateQueries({ queryKey: ['reports'] });
     },
     onError: (error) => handleError(error, 'Could not read one of those reports. Please try another file.'),
-  });
-
-  const shareMutation = useMutation({
-    mutationFn: () => generateSharePdf(result!.runId),
-    onSuccess: (response) => setShare(response.data),
-    onError: (error) => setErrorMessage(
-      error instanceof ApiError ? error.problem.detail : 'Could not build the doctor PDF right now.',
-    ),
   });
 
   const isComparing = compareMutation.isPending || uploadMutation.isPending;
@@ -367,30 +358,12 @@ export function ReportComparisonFeature() {
             </p>
           </Card>
 
-          <Card
-            className={styles.resultCard}
-            title="Share with your doctor"
-            subtitle="Creates a doctor-review PDF behind a revocable link that expires in 24 hours."
-            actions={
-              <Button variant="secondary" onClick={() => shareMutation.mutate()} isLoading={shareMutation.isPending}>
-                Create doctor PDF
-              </Button>
-            }
-          >
-            {share ? (
-              <p className={styles.narrative}>
-                <a href={absoluteApiUrl(share.shareUrl)} target="_blank" rel="noreferrer noopener">
-                  Open the shareable doctor PDF
-                </a>{' '}
-                - link expires {new Date(share.expiresAt).toLocaleString()}. Anyone with this link can view the
-                document, so share it only with your clinician.
-              </p>
-            ) : (
-              <p className={styles.narrative}>
-                The PDF carries the comparison table, the summary, and a doctor sign-off section.
-              </p>
-            )}
-          </Card>
+          <div className={styles.resultCard}>
+            <DoctorPdfCard
+              runId={result.runId}
+              subtitle="Download the comparison PDF, or send a 24-hour link to a doctor outside Health IQ."
+            />
+          </div>
         </>
       )}
     </section>

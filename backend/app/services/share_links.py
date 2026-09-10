@@ -13,7 +13,7 @@ from collections import defaultdict, deque
 from datetime import UTC, datetime, timedelta
 
 from app.config import get_settings
-from app.errors import ForbiddenError, NotFoundError, RateLimitedError
+from app.errors import GoneError, NotFoundError, RateLimitedError
 from app.repositories import sql_repo
 
 SHARE_TTL_HOURS = 24
@@ -41,28 +41,52 @@ def _enforce_rate_limit(ip_hash: str) -> None:
     hits.append(now)
 
 
-async def create_share_link(blob_path: str) -> tuple[str, str]:
+async def create_share_link(
+    blob_path: str, *, user_id: str, run_id: str, filename: str = ""
+) -> tuple[str, str]:
     """Create a new share token. Returns `(shareId, expiresAt)`; only its hash is persisted."""
     share_id = secrets.token_urlsafe(_TOKEN_BYTES)
     expires_at = (datetime.now(UTC) + timedelta(hours=SHARE_TTL_HOURS)).isoformat()
-    await sql_repo.create_share_link(_hash(share_id), blob_path, expires_at)
+    await sql_repo.create_share_link(
+        _hash(share_id), blob_path, expires_at, user_id=user_id, run_id=run_id, filename=filename
+    )
     return share_id, expires_at
+
+
+async def filename_for(share_id: str) -> str:
+    """Download filename recorded with the link; falls back to a generic, safe name."""
+    record = await sql_repo.get_share_link(_hash(share_id))
+    return (record or {}).get("filename") or "HealthIQ-Doctor-Review.pdf"
 
 
 async def resolve_share_link(share_id: str, *, client_ip: str) -> str:
     """Validate the token, enforce rate limiting, log access, and return the blob path to serve."""
-    _enforce_rate_limit(_hash(client_ip))
+    ip_hash = _hash(client_ip)
+    _enforce_rate_limit(ip_hash)
 
-    record = await sql_repo.get_share_link(_hash(share_id))
+    share_id_hash = _hash(share_id)
+    record = await sql_repo.get_share_link(share_id_hash)
     if record is None:
         raise NotFoundError("This share link is not valid")
+    if record.get("revokedAt"):
+        raise GoneError("This share link has been revoked")
     if datetime.fromisoformat(record["expiresAt"]) < datetime.now(UTC):
-        raise ForbiddenError("This share link has expired")
+        raise GoneError("This share link has expired")
 
-    record["accessCount"] = record.get("accessCount", 0) + 1
-    record["lastAccessAt"] = datetime.now(UTC).isoformat()
-    record["lastAccessIpHash"] = _hash(client_ip)
+    await sql_repo.record_share_access(
+        share_id_hash, accessed_at=datetime.now(UTC).isoformat(), ip_hash=ip_hash
+    )
     return record["blobPath"]
+
+
+async def revoke_share_link(share_id: str, *, user_id: str) -> None:
+    """Revoke a link the caller owns (FR5.6). Subsequent resolves return `410 gone`."""
+    revoked = await sql_repo.revoke_share_link(
+        _hash(share_id), user_id=user_id, revoked_at=datetime.now(UTC).isoformat()
+    )
+    if not revoked:
+        raise NotFoundError("This share link is not valid")
+
 
 
 async def build_sas_url(blob_path: str) -> str:
