@@ -1,20 +1,24 @@
-# Nutrition rules (seed source for `idx-nutrition`)
+# Nutrition rules
 
-Owner: D2. Ingested by `backend/app/rag/ingest.py` - one chunk per rule entry below.
+`nutrition_rules.json` is the shared, structured knowledge base used by the local meal-planner
+retriever. The same records are the future seed source for Azure AI Search `idx-nutrition`.
+Rules are curated once and shared by all users; reports and request preferences select relevant
+records, and profile/request allergies remove unsafe candidates.
 
-Each entry should define: `condition`, `cuisine`, `mealType`, `guidance`, `avoidList`,
-`sourceName`, `sourceUrl`, `sourceDate`. Ranges/guidance are educational, never a prescription.
+Each rule defines `conditionTags`, `cuisines`, `budgets`, `mealType`, candidate `items`, general
+`guidance`, `avoidList`, `allergens`, and a source with name, URL, and date. Guidance is
+educational and is never a diagnosis or prescription.
 
-## Example entry format
+## Current demo coverage
 
-```markdown
-### Type 2 diabetes - Indian cuisine - dinner
+- Condition tags: `elevated-glucose`, `elevated-ldl`, `low-vitamin-d`, `general-wellness`
+- Cuisines: `general`, `south-indian-veg`
+- Budgets: `low`, `medium`, `high`
+- Meal types: breakfast, lunch, dinner
+- Sources: World Health Organization and American Heart Association guidance
 
-- **guidance**: Prefer whole grains (millets, brown rice) over refined flour; pair carbs with
-  protein/fiber to blunt post-meal glucose spikes.
-- **avoidList**: sugary desserts, deep-fried snacks, sweetened beverages
-- **source**: `sourceName`, `sourceUrl`, `sourceDate`
-```
+## Retrieval behavior
 
-TODO(D2): add real entries for the demo conditions (diabetes, hypertension, high cholesterol,
-thyroid) across at least 2 cuisines and 3 meal types.
+Demo mode ranks exact cuisine matches above `general` fallback records and requires the requested
+budget. The deterministic allergen gate runs before plan assembly and validates the final plan
+again. Production can replace the local retriever with `idx-nutrition` without changing the API.

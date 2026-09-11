@@ -22,14 +22,32 @@ def _put(client, **body):
     return client.put("/api/v1/profile/preferences", json=body)
 
 
-def test_get_profile_returns_an_empty_profile_for_a_first_time_caller(client) -> None:
+def test_get_profile_returns_seeded_demo_profile(client) -> None:
     response = client.get("/api/v1/profile")
 
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["profile"]["userId"] == "demo-user"
-    assert data["profile"]["preferences"]["allergies"] == []
-    assert data["profile"]["consent"]["version"] is None
+    assert data["profile"]["preferences"] == {
+        "allergies": ["peanut"],
+        "goals": ["balanced-meals"],
+        "location": "Bengaluru",
+    }
+    assert data["profile"]["consent"]["version"] == "1.0"
+    assert data["profile"]["latestSummaryId"] == "report-2026-08-22"
+
+
+def test_get_profile_returns_empty_profile_for_unknown_demo_user(client) -> None:
+    response = client.get(
+        "/api/v1/profile",
+        headers={"X-Demo-User-Id": "first-time-user"},
+    )
+
+    assert response.status_code == 200
+    profile = response.json()["data"]["profile"]
+    assert profile["userId"] == "first-time-user"
+    assert profile["preferences"]["allergies"] == []
+    assert profile["consent"]["version"] is None
 
 
 def test_get_profile_returns_report_history_newest_first_with_scores(client) -> None:
@@ -46,17 +64,13 @@ def test_update_preferences_persists_and_normalizes_tokens(client) -> None:
     response = _put(
         client,
         allergies=["  Peanut ", "shellfish", "PEANUT"],
-        cuisine="south-indian-veg",
         goals=["reduce-hba1c"],
         location="Bengaluru",
-        budget="low",
     )
 
     assert response.status_code == 200
     preferences = response.json()["data"]["preferences"]
     assert preferences["allergies"] == ["peanut", "shellfish"]
-    assert preferences["cuisine"] == "south-indian-veg"
-    assert preferences["budget"] == "low"
 
     stored = client.get("/api/v1/profile").json()["data"]["profile"]
     assert stored["preferences"]["allergies"] == ["peanut", "shellfish"]
@@ -64,7 +78,7 @@ def test_update_preferences_persists_and_normalizes_tokens(client) -> None:
 
 
 def test_update_preferences_is_idempotent(client) -> None:
-    body = {"allergies": ["peanut"], "cuisine": "south-indian-veg", "goals": [], "location": None}
+    body = {"allergies": ["peanut"], "goals": [], "location": None}
 
     first = _put(client, **body).json()["data"]
     second = _put(client, **body).json()["data"]

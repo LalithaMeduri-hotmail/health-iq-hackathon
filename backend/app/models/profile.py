@@ -1,4 +1,4 @@
-"""Profile, specialist advisor, and meal planner contracts (docs/lld/3- and 5-low-level-design-*.md).
+"""Profile and specialist advisor contracts (docs/lld/3-low-level-design-*.md).
 
 `models/` is a pure leaf: no imports from services, repositories, or SDK clients here.
 """
@@ -40,8 +40,6 @@ class Preferences(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     allergies: list[str] = Field(default_factory=list)
-    cuisine: str | None = None
-    budget: str | None = None
     goals: list[str] = Field(default_factory=list)
     location: str | None = None
 
@@ -56,8 +54,6 @@ class PreferencesUpdate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     allergies: list[str] = Field(default_factory=list)
-    cuisine: str | None = None
-    budget: str | None = None
     goals: list[str] = Field(default_factory=list)
     location: str | None = None
     etag: str | None = None
@@ -151,21 +147,3 @@ class SpecialistGuidance(BaseModel):
     disclaimer: str = SPECIALIST_DISCLAIMER
 
 
-class MealDay(BaseModel):
-    """One day of a `MealPlan`."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    day: int
-    meals: dict[str, str]
-
-
-class MealPlan(BaseModel):
-    """`MealPlannerAgent` output contract (implementation-plan.md Section 4.2)."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    days: list[MealDay]
-    rationale: list[str] = Field(default_factory=list)
-    avoid_list: list[str] = Field(alias="avoidList", default_factory=list)
-    disclaimer: str

@@ -1,0 +1,26 @@
+{
+  "_comment": "Synthetic demo profiles for DEMO_MODE=true. Never use real patient data.",
+  "isDemoData": true,
+  "profiles": [
+    {
+      "id": "demo-user",
+      "userId": "demo-user",
+      "demographics": {
+        "ageBand": "adult",
+        "sex": null,
+        "location": "Bengaluru"
+      },
+      "consent": {
+        "version": "1.0",
+        "acceptedAt": "2026-08-22T09:00:00Z",
+        "purposes": ["ocr", "analysis", "pdf"]
+      },
+      "preferences": {
+        "allergies": ["peanut"],
+        "goals": ["balanced-meals"],
+        "location": "Bengaluru"
+      },
+      "latestSummaryId": "report-2026-08-22"
+    }
+  ]
+}

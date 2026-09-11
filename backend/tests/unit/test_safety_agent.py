@@ -71,7 +71,15 @@ def test_review_flags_alternative_missing_source() -> None:
 
 
 def test_review_flags_low_confidence_without_confirmation_flag() -> None:
-    payload = _base_payload(items=[{"lineId": "li-1", "ocrConfidence": 0.5, "needsUserConfirmation": False}])
+    payload = _base_payload(
+        items=[
+            {
+                "lineId": "li-1",
+                "ocrConfidence": 0.5,
+                "needsUserConfirmation": False,
+            }
+        ]
+    )
 
     verdict = review(payload)
 
@@ -91,3 +99,46 @@ def test_review_fails_closed_on_non_dict_payload() -> None:
 
     assert verdict.passed is False
     assert verdict.violations
+
+
+def _meal_plan_payload(**meal_overrides) -> dict:
+    meal = {
+        "type": "breakfast",
+        "items": ["Vegetable oats"],
+        "notes": "Choose minimally processed whole grains.",
+        "source": {"sourceUrl": "https://example.com", "sourceDate": "2026-01-01"},
+    }
+    meal.update(meal_overrides)
+    return {
+        "days": [{"day": 1, "meals": [meal]}],
+        "rationale": [],
+        "disclaimer": "General nutrition guidance only.",
+    }
+
+
+def test_review_flags_ungrounded_meal_plan_claim() -> None:
+    verdict = review(_meal_plan_payload(source={}))
+
+    assert verdict.passed is False
+    assert any(v.startswith("R2") for v in verdict.violations)
+
+
+def test_review_flags_allergen_in_meal_plan() -> None:
+    verdict = review(_meal_plan_payload(items=["Groundnut chutney"]), allergens=["peanut"])
+
+    assert verdict.passed is False
+    assert any("allergen" in v for v in verdict.violations)
+
+
+def test_review_flags_supplement_dosing_in_meal_plan() -> None:
+    verdict = review(_meal_plan_payload(notes="Take a vitamin D supplement 500 mg daily."))
+
+    assert verdict.passed is False
+    assert any("supplement dosing" in v for v in verdict.violations)
+
+
+def test_review_flags_calorie_prescription_in_meal_plan() -> None:
+    verdict = review(_meal_plan_payload(notes="Follow a 1200 calorie plan."))
+
+    assert verdict.passed is False
+    assert any("calorie prescription" in v for v in verdict.violations)
