@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 
 import { AppShell } from '@/components/layout/AppShell';
 import { ConsentModal } from '@/components/ConsentModal';
 import { AuthProvider } from '@/features/auth';
 import { HealthProfile } from '@/routes/HealthProfile';
+import { Home } from '@/routes/Home';
 import { Login } from '@/routes/Login';
 import { MealPlanner } from '@/routes/MealPlanner';
 import { PrescriptionAnalyzer } from '@/routes/PrescriptionAnalyzer';
@@ -25,7 +26,7 @@ export function App() {
 
           <AppShell>
             <Routes>
-              <Route path="/" element={<Navigate to="/prescriptions" replace />} />
+              <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/prescriptions" element={<PrescriptionAnalyzer />} />

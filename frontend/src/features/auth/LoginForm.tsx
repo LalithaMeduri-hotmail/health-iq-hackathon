@@ -47,7 +47,7 @@ export function LoginForm() {
     setFormError(null);
     try {
       await login(values);
-      navigate('/prescriptions', { replace: true });
+      navigate('/', { replace: true });
     } catch (error) {
       setFormError(loginErrorMessage(error));
     }

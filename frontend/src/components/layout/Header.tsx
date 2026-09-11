@@ -7,11 +7,18 @@ import logoUrl from '@/assets/logo-icon.png';
 import { useAuth } from '@/features/auth';
 import styles from './Header.module.css';
 
+// Labels name the outcome a user gets, not the internal feature name; the description is exposed
+// as a tooltip on desktop and as a second line in the mobile menu.
 const NAV_ITEMS = [
-  { to: '/prescriptions', label: 'Prescription Analyzer' },
-  { to: '/profile', label: 'Health Profile' },
-  { to: '/comparison', label: 'Report Comparison' },
-  { to: '/meal-plan', label: 'Meal Planner' },
+  { to: '/', label: 'Home', description: 'All your health tools in one place' },
+  { to: '/profile', label: 'Health Report', description: 'Understand your lab results and who to consult' },
+  {
+    to: '/prescriptions',
+    label: 'Prescription Check',
+    description: 'Check a prescription for lower-cost alternatives',
+  },
+  { to: '/comparison', label: 'Report Trends', description: 'See what changed between two reports' },
+  { to: '/meal-plan', label: 'Meal Plan', description: 'Food guidance built around your results' },
 ];
 
 function initials(name: string): string {
@@ -55,18 +62,20 @@ export function Header() {
   return (
     <header className={styles.header}>
       <div className={`container ${styles.bar}`}>
-        <a className={styles.brand} href="/prescriptions" aria-label="HealthIQ home">
+        <Link className={styles.brand} to="/" aria-label="HealthIQ home">
           <img src={logoUrl} alt="" className={styles.logo} />
           <span className={styles.brandText}>
             Health<span className={styles.brandAccent}>IQ</span>
           </span>
-        </a>
+        </Link>
 
         <nav className={styles.navDesktop} aria-label="Primary">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
+              end={item.to === '/'}
+              title={item.description}
               className={({ isActive }) => `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`}
             >
               {item.label}
@@ -96,10 +105,12 @@ export function Header() {
             <NavLink
               key={item.to}
               to={item.to}
+              end={item.to === '/'}
               onClick={() => setIsMenuOpen(false)}
               className={({ isActive }) => `${styles.navLinkMobile} ${isActive ? styles.navLinkActive : ''}`}
             >
               {item.label}
+              <span className={styles.navDescription}>{item.description}</span>
             </NavLink>
           ))}
         </nav>
