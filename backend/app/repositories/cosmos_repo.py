@@ -23,9 +23,31 @@ from app.models.report import StoredReport
 _DEMO_RUNS_STORE: dict[str, dict] = {}
 _DEMO_SAVED_REPORTS: dict[str, StoredReport] = {}
 _DEMO_PROFILES: dict[str, dict] = {}
+_DEMO_PROFILES_PATH = (
+    Path(__file__).resolve().parents[3] / "data" / "samples" / "demo_profiles.json"
+)
 _DEMO_ACCOUNTS: dict[str, dict] = {}
 _DEMO_ACCOUNT_INDEX: dict[str, str] = {}  # casefolded username/mobile/email -> userId
-_DEMO_REPORTS_PATH = Path(__file__).resolve().parents[3] / "data" / "samples" / "demo_lab_reports.json"
+_DEMO_REPORTS_PATH = (
+    Path(__file__).resolve().parents[3] / "data" / "samples" / "demo_lab_reports.json"
+)
+
+
+@lru_cache
+def load_demo_profiles() -> dict[str, dict]:
+    """Synthetic demo profiles keyed by `userId`; in-memory writes override these baselines."""
+    raw = json.loads(_DEMO_PROFILES_PATH.read_text(encoding="utf-8"))
+    profiles = {
+        document["userId"]: document
+        for document in raw["profiles"]
+    }
+    for user_id, document in profiles.items():
+        if document["id"] != user_id:
+            raise ValueError(
+                f"Demo profile id {document['id']!r} must match userId {user_id!r}"
+            )
+        Profile.model_validate(document)
+    return profiles
 
 
 @lru_cache
@@ -38,7 +60,10 @@ def load_demo_reports() -> list[StoredReport]:
 
 def _demo_reports() -> list[StoredReport]:
     """Seeded history plus anything analyzed during this session."""
-    return sorted([*load_demo_reports(), *_DEMO_SAVED_REPORTS.values()], key=lambda report: report.report_date)
+    return sorted(
+        [*load_demo_reports(), *_DEMO_SAVED_REPORTS.values()],
+        key=lambda report: report.report_date,
+    )
 
 
 def _use_demo_store() -> bool:
@@ -63,7 +88,7 @@ def _profiles_container():
 
 
 def _demo_etag(document: dict) -> str:
-    """Content-derived stand-in for Cosmos `_etag`, so the demo store enforces the same concurrency."""
+    """Content-derived `_etag` stand-in that enforces demo-store concurrency."""
     payload = {key: value for key, value in document.items() if key not in {"etag", "_etag"}}
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
@@ -83,7 +108,7 @@ async def get_profile(user_id: str) -> Profile:
     caller, per LLD Section 2.3.2.
     """
     if _use_demo_store():
-        document = _DEMO_PROFILES.get(user_id)
+        document = _DEMO_PROFILES.get(user_id) or load_demo_profiles().get(user_id)
     else:
         try:
             document = await _profiles_container().read_item(item=user_id, partition_key=user_id)
@@ -170,7 +195,10 @@ async def get_report(user_id: str, report_id: str) -> StoredReport:
         query = "SELECT * FROM c WHERE c.userId = @userId AND c.id = @reportId"
         documents = _reports_container().query_items(
             query=query,
-            parameters=[{"name": "@userId", "value": user_id}, {"name": "@reportId", "value": report_id}],
+            parameters=[
+                {"name": "@userId", "value": user_id},
+                {"name": "@reportId", "value": report_id},
+            ],
             partition_key=user_id,
         )
         report = next(

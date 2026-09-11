@@ -1,0 +1,198 @@
+{
+  "_comment": "Shared curated demo knowledge for local retrieval and future idx-nutrition ingestion.",
+  "isDemoData": true,
+  "rules": [
+    {
+      "id": "general-breakfast-01",
+      "conditionTags": ["elevated-glucose", "elevated-ldl", "low-vitamin-d", "general-wellness"],
+      "cuisines": ["general"],
+      "budgets": ["low", "medium", "high"],
+      "mealType": "breakfast",
+      "items": ["Vegetable oats with unsweetened yogurt"],
+      "guidance": "Choose minimally processed whole grains, vegetables, and an unsweetened protein-rich accompaniment.",
+      "avoidList": ["sugar-sweetened breakfast cereals", "sweetened beverages"],
+      "allergens": ["dairy"],
+      "source": {
+        "sourceName": "World Health Organization - Healthy diet",
+        "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+        "sourceDate": "2024-10-01"
+      }
+    },
+    {
+      "id": "general-breakfast-02",
+      "conditionTags": ["elevated-glucose", "elevated-ldl", "low-vitamin-d", "general-wellness"],
+      "cuisines": ["general"],
+      "budgets": ["low", "medium", "high"],
+      "mealType": "breakfast",
+      "items": ["Vegetable porridge with roasted chickpeas"],
+      "guidance": "Pair a whole-grain breakfast with vegetables and legumes for fiber and variety.",
+      "avoidList": ["refined-grain pastries", "sweetened beverages"],
+      "allergens": [],
+      "source": {
+        "sourceName": "World Health Organization - Healthy diet",
+        "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+        "sourceDate": "2024-10-01"
+      }
+    },
+    {
+      "id": "general-lunch-01",
+      "conditionTags": ["elevated-glucose", "elevated-ldl", "low-vitamin-d", "general-wellness"],
+      "cuisines": ["general"],
+      "budgets": ["low", "medium", "high"],
+      "mealType": "lunch",
+      "items": ["Brown rice, lentil stew, and mixed vegetables"],
+      "guidance": "Build the meal around vegetables, legumes, and a moderate portion of whole grains.",
+      "avoidList": ["deep-fried sides", "sugary drinks"],
+      "allergens": [],
+      "source": {
+        "sourceName": "World Health Organization - Healthy diet",
+        "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+        "sourceDate": "2024-10-01"
+      }
+    },
+    {
+      "id": "general-lunch-02",
+      "conditionTags": ["elevated-glucose", "elevated-ldl", "general-wellness"],
+      "cuisines": ["general"],
+      "budgets": ["low", "medium", "high"],
+      "mealType": "lunch",
+      "items": ["Whole-wheat flatbread with bean and vegetable curry"],
+      "guidance": "Prefer whole grains and plant protein while keeping highly processed foods occasional.",
+      "avoidList": ["refined-flour breads", "high-salt packaged sides"],
+      "allergens": ["gluten"],
+      "source": {
+        "sourceName": "World Health Organization - Healthy diet",
+        "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+        "sourceDate": "2024-10-01"
+      }
+    },
+    {
+      "id": "general-dinner-01",
+      "conditionTags": ["elevated-glucose", "elevated-ldl", "low-vitamin-d", "general-wellness"],
+      "cuisines": ["general"],
+      "budgets": ["low", "medium", "high"],
+      "mealType": "dinner",
+      "items": ["Millet and vegetable bowl with lentil soup"],
+      "guidance": "Use varied vegetables, pulses, and whole grains as the foundation of the evening meal.",
+      "avoidList": ["processed meats", "sugar-sweetened desserts"],
+      "allergens": [],
+      "source": {
+        "sourceName": "World Health Organization - Healthy diet",
+        "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+        "sourceDate": "2024-10-01"
+      }
+    },
+    {
+      "id": "general-dinner-02",
+      "conditionTags": ["elevated-glucose", "elevated-ldl", "general-wellness"],
+      "cuisines": ["general"],
+      "budgets": ["medium", "high"],
+      "mealType": "dinner",
+      "items": ["Grilled fish with steamed vegetables and barley"],
+      "guidance": "Choose an unsaturated-fat protein option with vegetables and a whole grain.",
+      "avoidList": ["deep-fried fish", "creamy sauces"],
+      "allergens": ["fish", "gluten"],
+      "source": {
+        "sourceName": "American Heart Association - Diet and lifestyle recommendations",
+        "sourceUrl": "https://www.heart.org/en/healthy-living/healthy-eating/eat-smart/nutrition-basics/aha-diet-and-lifestyle-recommendations",
+        "sourceDate": "2024-01-10"
+      }
+    },
+    {
+      "id": "south-indian-breakfast-01",
+      "conditionTags": ["elevated-glucose", "elevated-ldl", "low-vitamin-d", "general-wellness"],
+      "cuisines": ["south-indian-veg"],
+      "budgets": ["low", "medium", "high"],
+      "mealType": "breakfast",
+      "items": ["Vegetable ragi dosa with sambar"],
+      "guidance": "Combine a whole-grain dish with vegetables and pulses, without sweetened accompaniments.",
+      "avoidList": ["sweetened chutneys", "sugary tea"],
+      "allergens": [],
+      "source": {
+        "sourceName": "World Health Organization - Healthy diet",
+        "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+        "sourceDate": "2024-10-01"
+      }
+    },
+    {
+      "id": "south-indian-breakfast-02",
+      "conditionTags": ["elevated-glucose", "elevated-ldl", "general-wellness"],
+      "cuisines": ["south-indian-veg"],
+      "budgets": ["low", "medium", "high"],
+      "mealType": "breakfast",
+      "items": ["Vegetable oats upma with sprouts"],
+      "guidance": "Include vegetables, whole grains, and legumes in place of refined breakfast foods.",
+      "avoidList": ["deep-fried breakfast snacks", "sweetened beverages"],
+      "allergens": [],
+      "source": {
+        "sourceName": "World Health Organization - Healthy diet",
+        "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+        "sourceDate": "2024-10-01"
+      }
+    },
+    {
+      "id": "south-indian-lunch-01",
+      "conditionTags": ["elevated-glucose", "elevated-ldl", "low-vitamin-d", "general-wellness"],
+      "cuisines": ["south-indian-veg"],
+      "budgets": ["low", "medium", "high"],
+      "mealType": "lunch",
+      "items": ["Brown rice, vegetable sambar, beans poriyal, and cucumber salad"],
+      "guidance": "Emphasize vegetables and pulses, with a moderate whole-grain portion.",
+      "avoidList": ["fried papad", "sugar-sweetened drinks"],
+      "allergens": [],
+      "source": {
+        "sourceName": "World Health Organization - Healthy diet",
+        "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+        "sourceDate": "2024-10-01"
+      }
+    },
+    {
+      "id": "south-indian-lunch-02",
+      "conditionTags": ["elevated-glucose", "elevated-ldl", "general-wellness"],
+      "cuisines": ["south-indian-veg"],
+      "budgets": ["medium", "high"],
+      "mealType": "lunch",
+      "items": ["Millet lemon rice with vegetable kootu"],
+      "guidance": "Choose whole grains, pulses, and varied vegetables while limiting saturated fat and excess salt.",
+      "avoidList": ["pickle in large portions", "deep-fried sides"],
+      "allergens": [],
+      "source": {
+        "sourceName": "American Heart Association - Diet and lifestyle recommendations",
+        "sourceUrl": "https://www.heart.org/en/healthy-living/healthy-eating/eat-smart/nutrition-basics/aha-diet-and-lifestyle-recommendations",
+        "sourceDate": "2024-01-10"
+      }
+    },
+    {
+      "id": "south-indian-dinner-01",
+      "conditionTags": ["elevated-glucose", "elevated-ldl", "low-vitamin-d", "general-wellness"],
+      "cuisines": ["south-indian-veg"],
+      "budgets": ["low", "medium", "high"],
+      "mealType": "dinner",
+      "items": ["Mixed-vegetable adai with tomato chutney"],
+      "guidance": "Pair pulses and vegetables in a minimally processed evening meal.",
+      "avoidList": ["coconut-heavy fried sides", "sweetened beverages"],
+      "allergens": [],
+      "source": {
+        "sourceName": "World Health Organization - Healthy diet",
+        "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+        "sourceDate": "2024-10-01"
+      }
+    },
+    {
+      "id": "south-indian-dinner-02",
+      "conditionTags": ["elevated-glucose", "elevated-ldl", "general-wellness"],
+      "cuisines": ["south-indian-veg"],
+      "budgets": ["low", "medium", "high"],
+      "mealType": "dinner",
+      "items": ["Vegetable millet pongal with lentil soup"],
+      "guidance": "Favor vegetables, pulses, and whole grains over refined or heavily fried foods.",
+      "avoidList": ["deep-fried accompaniments", "sugary desserts"],
+      "allergens": [],
+      "source": {
+        "sourceName": "World Health Organization - Healthy diet",
+        "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+        "sourceDate": "2024-10-01"
+      }
+    }
+  ]
+}
