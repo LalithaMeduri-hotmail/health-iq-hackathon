@@ -1,0 +1,8 @@
+.root {
+  display: inline-block;
+}
+
+.unit {
+  display: inline-block;
+  will-change: transform, opacity;
+}

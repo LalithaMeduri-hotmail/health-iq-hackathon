@@ -59,7 +59,7 @@
   width: 2.1rem;
   height: 2.1rem;
   border-radius: 50%;
-  background: var(--color-white);
+  background: var(--color-bg-surface);
   border: 1px solid var(--color-border);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);

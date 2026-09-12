@@ -59,6 +59,8 @@ export function LoginForm() {
         <form className={styles.form} onSubmit={onSubmit} noValidate>
           <Input
             label="Username, mobile, or email"
+            hideLabel
+            placeholder="Username, mobile, or email"
             autoComplete="username"
             error={errors.identifier?.message}
             {...register('identifier')}

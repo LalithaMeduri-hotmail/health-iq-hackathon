@@ -1,6 +1,8 @@
 /** Site footer - brand recap, quick nav, contact/about, social placeholders, compliance line. */
 
 import logoUrl from '@/assets/logo-icon.png';
+import logoDarkUrl from '@/assets/logo-icon-dark.png';
+import { useTheme } from '@/components/ThemeProvider';
 import styles from './Footer.module.css';
 
 const PRODUCT_LINKS = [
@@ -19,12 +21,14 @@ const SOCIAL_PLACEHOLDERS = [
 ];
 
 export function Footer() {
+  const { theme } = useTheme();
+
   return (
     <footer className={styles.footer}>
       <div className={`container ${styles.grid}`}>
         <div className={styles.brandColumn}>
           <div className={styles.brandRow}>
-            <img src={logoUrl} alt="" className={styles.logo} />
+            <img src={theme === 'dark' ? logoDarkUrl : logoUrl} alt="" className={styles.logo} />
             <span className={styles.brandText}>
               Health<span className={styles.brandAccent}>IQ</span>
             </span>

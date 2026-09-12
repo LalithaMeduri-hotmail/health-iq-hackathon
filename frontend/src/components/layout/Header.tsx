@@ -4,21 +4,16 @@ import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 
 import logoUrl from '@/assets/logo-icon.png';
+import logoDarkUrl from '@/assets/logo-icon-dark.png';
+import { useTheme } from '@/components/ThemeProvider';
 import { useAuth } from '@/features/auth';
 import styles from './Header.module.css';
 
-// Labels name the outcome a user gets, not the internal feature name; the description is exposed
-// as a tooltip on desktop and as a second line in the mobile menu.
 const NAV_ITEMS = [
-  { to: '/', label: 'Home', description: 'All your health tools in one place' },
-  { to: '/profile', label: 'Health Report', description: 'Understand your lab results and who to consult' },
-  {
-    to: '/prescriptions',
-    label: 'Prescription Check',
-    description: 'Check a prescription for lower-cost alternatives',
-  },
-  { to: '/comparison', label: 'Report Trends', description: 'See what changed between two reports' },
-  { to: '/meal-plan', label: 'Meal Plan', description: 'Food guidance built around your results' },
+  { to: '/prescriptions', label: 'Prescription Analyzer' },
+  { to: '/profile', label: 'Health Profile' },
+  { to: '/comparison', label: 'Report Comparison' },
+  { to: '/meal-plan', label: 'Meal Planner' },
 ];
 
 function initials(name: string): string {
@@ -56,14 +51,32 @@ function AccountChip() {
   );
 }
 
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === 'dark';
+
+  return (
+    <button
+      type="button"
+      className={styles.themeToggle}
+      onClick={toggleTheme}
+      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+    >
+      {isDark ? '\u2600\uFE0F' : '\u{1F319}'}
+    </button>
+  );
+}
+
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { theme } = useTheme();
 
   return (
     <header className={styles.header}>
       <div className={`container ${styles.bar}`}>
         <Link className={styles.brand} to="/" aria-label="HealthIQ home">
-          <img src={logoUrl} alt="" className={styles.logo} />
+          <img src={theme === 'dark' ? logoDarkUrl : logoUrl} alt="" className={styles.logo} />
           <span className={styles.brandText}>
             Health<span className={styles.brandAccent}>IQ</span>
           </span>
@@ -74,8 +87,6 @@ export function Header() {
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === '/'}
-              title={item.description}
               className={({ isActive }) => `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`}
             >
               {item.label}
@@ -84,6 +95,7 @@ export function Header() {
         </nav>
 
         <div className={styles.rightSlot}>
+          <ThemeToggle />
           <AccountChip />
 
           <button
@@ -105,12 +117,10 @@ export function Header() {
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === '/'}
               onClick={() => setIsMenuOpen(false)}
               className={({ isActive }) => `${styles.navLinkMobile} ${isActive ? styles.navLinkActive : ''}`}
             >
               {item.label}
-              <span className={styles.navDescription}>{item.description}</span>
             </NavLink>
           ))}
         </nav>

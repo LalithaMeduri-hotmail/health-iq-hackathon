@@ -5,14 +5,13 @@
 import { useState } from 'react';
 
 import { Button } from '@/components/ui';
+import { CONSENT_VERSION, storeConsentVersion } from '@/lib/consent';
 
 import { Modal } from './ui/Modal';
 
 interface ConsentModalProps {
   onAccept: (consentVersion: string) => void;
 }
-
-const CONSENT_VERSION = '2026-08-27';
 
 export function ConsentModal({ onAccept }: ConsentModalProps) {
   const [accepted, setAccepted] = useState(false);
@@ -30,6 +29,7 @@ export function ConsentModal({ onAccept }: ConsentModalProps) {
       <Button
         variant="primary"
         onClick={() => {
+          storeConsentVersion(CONSENT_VERSION);
           setAccepted(true);
           onAccept(CONSENT_VERSION);
         }}

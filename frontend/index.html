@@ -10,6 +10,20 @@
     />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <title>HealthIQ - Smarter health. Better you.</title>
+    <script>
+      // Set data-theme before first paint so there's no flash of the wrong theme.
+      (function () {
+        try {
+          var stored = localStorage.getItem('healthiq-theme');
+          var theme = stored === 'light' || stored === 'dark'
+            ? stored
+            : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {
+          // localStorage/matchMedia unavailable (e.g. privacy mode) - default light is fine.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

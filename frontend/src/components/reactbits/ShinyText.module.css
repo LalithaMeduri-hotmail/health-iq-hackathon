@@ -1,0 +1,42 @@
+.shinyText {
+  /* Brand-colored sweep (not the library's default white-on-dark shine) so it reads on our light UI. */
+  background: linear-gradient(
+    120deg,
+    var(--color-accent-700) 0%,
+    var(--color-accent-700) 40%,
+    var(--color-brand-500) 50%,
+    var(--color-accent-700) 60%,
+    var(--color-accent-700) 100%
+  );
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: shine linear infinite;
+}
+
+.disabled {
+  animation: none;
+  background: none;
+  color: var(--color-accent-700);
+  -webkit-text-fill-color: var(--color-accent-700);
+}
+
+@keyframes shine {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shinyText {
+    animation: none;
+    background: none;
+    color: var(--color-accent-700);
+    -webkit-text-fill-color: var(--color-accent-700);
+  }
+}

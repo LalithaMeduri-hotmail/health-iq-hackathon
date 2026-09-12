@@ -13,13 +13,14 @@
 
 .control {
   width: 100%;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--font-size-sm);
+  height: 3.75rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 0 var(--space-4);
+  font-size: var(--font-size-md);
   font-family: inherit;
   color: var(--color-text-primary);
-  background: var(--color-white);
+  background: var(--color-bg-surface);
   transition:
     border-color var(--transition-fast),
     box-shadow var(--transition-fast);
@@ -32,7 +33,7 @@
 }
 
 .control::placeholder {
-  color: var(--color-ink-300);
+  color: var(--color-text-secondary);
 }
 
 .controlError {

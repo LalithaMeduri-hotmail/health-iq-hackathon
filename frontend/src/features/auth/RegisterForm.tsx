@@ -80,9 +80,31 @@ export function RegisterForm() {
     <div className={styles.page}>
       <Card className={styles.card} title="Create your account" subtitle="A mobile number or email lets you recover access later.">
         <form className={styles.form} onSubmit={onSubmit} noValidate>
-          <Input label="Username" autoComplete="username" error={errors.username?.message} {...register('username')} />
-          <Input label="Mobile number" autoComplete="tel" error={errors.mobile?.message} {...register('mobile')} />
-          <Input label="Email" type="email" autoComplete="email" error={errors.email?.message} {...register('email')} />
+          <Input
+            label="Username"
+            hideLabel
+            placeholder="Username"
+            autoComplete="username"
+            error={errors.username?.message}
+            {...register('username')}
+          />
+          <Input
+            label="Mobile number"
+            hideLabel
+            placeholder="Mobile number"
+            autoComplete="tel"
+            error={errors.mobile?.message}
+            {...register('mobile')}
+          />
+          <Input
+            label="Email"
+            hideLabel
+            placeholder="Email"
+            type="email"
+            autoComplete="email"
+            error={errors.email?.message}
+            {...register('email')}
+          />
           <Controller
             name="pin"
             control={control}
