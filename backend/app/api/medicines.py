@@ -7,15 +7,40 @@ Calls `services/normalize_medicine.py` alternative-matching rules (Section 2.3) 
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.agents import safety_agent
 from app.deps import CurrentUser, get_current_user
 from app.models.common import ApiResponse, SafetyBlock
-from app.models.medicine import MedicineEntity, MedicinesAlternativesRequest, MedicinesAlternativesResponse
-from app.services.normalize_medicine import find_alternatives
+from app.models.medicine import (
+    MedicineCatalogResponse,
+    MedicineEntity,
+    MedicinesAlternativesRequest,
+    MedicinesAlternativesResponse,
+)
+from app.services.normalize_medicine import catalog_options, find_alternatives
 
 router = APIRouter(prefix="/api/v1/medicines", tags=["medicines"])
+
+
+@router.get("/catalog")
+async def catalog(
+    request: Request,
+    q: str | None = Query(default=None, max_length=64),
+    limit: int = Query(default=50, ge=1, le=200),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> ApiResponse[MedicineCatalogResponse]:
+    """Type-ahead options for the manual-entry picker, so a user can only pick a known medicine."""
+    data = MedicineCatalogResponse.model_validate({"items": catalog_options(q, limit)})
+    verdict = safety_agent.review(data.model_dump(by_alias=True))
+    safety = SafetyBlock(pass_=verdict.passed, notes=verdict.violations, reviewer_version="safety-1.0.0")
+
+    return ApiResponse(
+        request_id=getattr(request.state, "request_id", str(uuid.uuid4())),
+        generated_at=datetime.now(UTC),
+        safety=safety,
+        data=data,
+    )
 
 
 @router.post("/alternatives")

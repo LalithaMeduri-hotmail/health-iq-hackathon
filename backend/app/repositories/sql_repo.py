@@ -232,8 +232,10 @@ async def get_doctor_review(token_hash: str) -> dict | None:
     )
 
 
-async def record_doctor_decision(token_hash: str, *, status: str, notes: str, decided_at: str) -> bool:
-    """Persist the clinician's verdict. Returns `False` when the token is unknown."""
+async def record_doctor_decision(
+    token_hash: str, *, status: str, notes: str, decided_at: str, decisions: list[dict]
+) -> bool:
+    """Persist the clinician's verdicts. Returns `False` when the token is unknown."""
     if _use_demo_store():
         record = _DEMO_DOCTOR_REVIEWS.get(token_hash)
         if record is None:
@@ -241,9 +243,22 @@ async def record_doctor_decision(token_hash: str, *, status: str, notes: str, de
         record["status"] = status
         record["notes"] = notes
         record["decidedAt"] = decided_at
+        record["decisions"] = [dict(entry) for entry in decisions]
         return True
     raise NotImplementedError(
         "Live Azure SQL DoctorReview writes are not wired yet; set DEMO_MODE=true or implement the pyodbc path here."
+    )
+
+
+async def find_doctor_review(user_id: str, review_id: str) -> dict | None:
+    """Look up one review by its short id, scoped by `userId`; `None` when the patient has none."""
+    if _use_demo_store():
+        for record in _DEMO_DOCTOR_REVIEWS.values():
+            if record.get("userId") == user_id and record.get("reviewId") == review_id:
+                return dict(record)
+        return None
+    raise NotImplementedError(
+        "Live Azure SQL DoctorReview reads are not wired yet; set DEMO_MODE=true or implement the pyodbc path here."
     )
 
 

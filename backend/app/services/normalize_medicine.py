@@ -269,6 +269,13 @@ def find_alternatives(item: MedicineEntity) -> list[dict]:
             "original": f"{original_label} {strength_label}",
             "generic": f"{cheapest['genericName']} {strength_label}",
             "cheaper": f"{cheapest['manufacturer']} {cheapest['brandName']} {strength_label}",
+            # Same values split out, so a caller can render the name and its maker separately.
+            "originalBrand": f"{original_label} {strength_label}",
+            "originalMaker": original_row["manufacturer"] if original_row else "",
+            "cheaperBrand": f"{cheapest['brandName']} {strength_label}",
+            "cheaperMaker": cheapest["manufacturer"],
+            "cheaperGeneric": cheapest["genericName"],
+            "dosageForm": cheapest["dosageForm"],
             "originalMrpInr": original_price,
             "cheaperMrpInr": cheapest["mrpInr"],
             "savingsPct": savings_pct,
@@ -282,6 +289,49 @@ def find_alternatives(item: MedicineEntity) -> list[dict]:
             "matchBasis": "exact-ingredient-strength-form",
         }
     ]
+
+
+def catalog_options(query: str | None = None, limit: int = 50) -> list[dict]:
+    """Selectable `(brand, strength, form)` catalog entries for the manual-entry picker.
+
+    Deterministic substring match over brand and active ingredient so the picker stays
+    unit-testable and cannot surface a medicine outside the curated catalog. Ranking: brand
+    prefix, then brand substring, then ingredient match; ties break alphabetically.
+    """
+    needle = (query or "").strip().casefold()
+
+    options: dict[str, dict] = {}
+    for row in list_catalog():
+        brand = row["brandName"].casefold()
+        ingredient = row["activeIngredient"].casefold()
+        if needle:
+            if brand.startswith(needle):
+                rank = 0
+            elif needle in brand:
+                rank = 1
+            elif needle in ingredient:
+                rank = 2
+            else:
+                continue
+        else:
+            rank = 0
+
+        label = f"{row['brandName']} {row['strengthValue']:g} {row['strengthUnit']} {row['dosageForm']}"
+        options.setdefault(
+            label,
+            {
+                "label": label,
+                "brandName": row["brandName"],
+                "activeIngredient": row["activeIngredient"],
+                "strengthValue": row["strengthValue"],
+                "strengthUnit": row["strengthUnit"],
+                "dosageForm": row["dosageForm"],
+                "_rank": rank,
+            },
+        )
+
+    ranked = sorted(options.values(), key=lambda option: (option["_rank"], option["label"].casefold()))
+    return [{key: value for key, value in option.items() if key != "_rank"} for option in ranked[:limit]]
 
 
 def apply_correction(item: MedicineEntity, correction: MedicineCorrection) -> MedicineEntity:

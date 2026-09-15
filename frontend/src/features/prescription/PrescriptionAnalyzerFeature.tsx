@@ -32,7 +32,6 @@ interface ConfirmState {
   items: MedicineEntity[];
   ocrConfidence: number;
 }
-
 function averageConfidence(items: MedicineEntity[]): number {
   const scored = items.map((item) => item.ocrConfidence).filter((value): value is number => value !== null);
   if (scored.length === 0) {
@@ -45,12 +44,15 @@ export function PrescriptionAnalyzerFeature() {
   const [step, setStep] = useState<Step>('upload');
   const [confirmation, setConfirmation] = useState<ConfirmState | null>(null);
   const [results, setResults] = useState<ResultsState | null>(null);
+  // Read off the uploaded prescription; it pre-fills the name on the doctor-signed document.
+  const [patientName, setPatientName] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const analyzeMutation = useMutation({
     mutationFn: analyzePrescription,
     onSuccess: (response) => {
       setErrorMessage(null);
+      setPatientName(response.data.patientName);
       setConfirmation({
         runId: response.data.runId,
         items: response.data.items,
@@ -96,6 +98,7 @@ export function PrescriptionAnalyzerFeature() {
   function startOver() {
     setConfirmation(null);
     setResults(null);
+    setPatientName(null);
     setErrorMessage(null);
     setStep('upload');
   }
@@ -146,6 +149,7 @@ export function PrescriptionAnalyzerFeature() {
           runId={results.runId}
           ocrConfidence={results.ocrConfidence}
           items={results.items}
+          patientName={patientName}
           onStartOver={startOver}
         />
       )}

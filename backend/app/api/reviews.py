@@ -9,7 +9,7 @@ import html
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Form, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import HTMLResponse
 
 from app.deps import CurrentUser, get_current_user
@@ -21,7 +21,7 @@ from app.models.review import (
     ReviewRequestResponse,
 )
 from app.repositories import cosmos_repo
-from app.services import doctor_pdf, doctors, reviews
+from app.services import doctor_pdf, doctors, patients, reviews
 
 router = APIRouter(prefix="/api/v1", tags=["reviews"])
 
@@ -30,6 +30,21 @@ _STATUS_COPY = {
     "changes_requested": ("Changes requested", "#b45309", "#fef3c7"),
     "rejected": ("Not approved", "#b91c1c", "#fee2e2"),
     "pending": ("Awaiting your decision", "#1d4ed8", "#dbeafe"),
+}
+
+# (value, full wording shown on hover/for screen readers, symbol on the button)
+_DECISION_OPTIONS = (
+    ("approved", "Approve", "&#10003;"),
+    ("changes_requested", "Request change", "&#9998;"),
+    ("rejected", "Do not approve", "&#10007;"),
+)
+
+_DECISION_LABELS = {value: label for value, label, _ in _DECISION_OPTIONS}
+_DECISION_SYMBOLS = {value: symbol for value, _, symbol in _DECISION_OPTIONS}
+
+_DOCUMENT_COPY = {
+    "approved": "New Health IQ prescription (PDF)",
+    "followup": "Follow-up required (PDF)",
 }
 
 
@@ -57,7 +72,7 @@ async def request_review(
     body: ReviewRequestBody,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> ApiResponse[ReviewRequestResponse]:
-    """`{ runId, doctorIds[] }` -> emails each clinician the PDF plus a tokenised approval link."""
+    """`{ runId, doctorIds[], patientName }` -> emails each clinician the PDF plus an approval link."""
     run = await cosmos_repo.get_run(current_user.user_id, body.run_id)
     filename, content = doctor_pdf.build_for_run(run)
 
@@ -66,6 +81,8 @@ async def request_review(
         run_id=body.run_id,
         doctor_ids=body.doctor_ids,
         medicines=doctor_pdf.medicine_names(run),
+        lines=doctor_pdf.medicine_lines(run),
+        patient_name=body.patient_name or await patients.display_name(current_user.user_id),
         pdf_filename=filename,
         pdf_bytes=content,
     )
@@ -84,12 +101,7 @@ async def review_status(
     return _envelope(request, ReviewListResponse(runId=runId, reviews=summaries, approved=approved))
 
 
-@router.get("/reviews/{token}/document")
-async def review_document(token: str) -> Response:
-    """Serve the PDF behind the review token so the clinician can read it before deciding."""
-    record = await reviews.get_review(token)
-    run = await cosmos_repo.get_run(record["userId"], record["runId"])
-    filename, content = doctor_pdf.build_for_run(run)
+def _pdf_response(filename: str, content: bytes) -> Response:
     return Response(
         content=content,
         media_type="application/pdf",
@@ -101,6 +113,39 @@ async def review_document(token: str) -> Response:
     )
 
 
+@router.get("/reviews/{token}/document")
+async def review_document(token: str) -> Response:
+    """Serve the PDF behind the review token so the clinician can read it before deciding."""
+    record = await reviews.get_review(token)
+    run = await cosmos_repo.get_run(record["userId"], record["runId"])
+    filename, content = doctor_pdf.build_for_run(run)
+    return _pdf_response(filename, content)
+
+
+@router.get("/reviews/{token}/prescription/{kind}")
+async def review_outcome_document(token: str, kind: str) -> Response:
+    """The clinician's copy of what they just signed: `approved` plan or `followup` list."""
+    record = await reviews.get_review(token)
+    return _pdf_response(*await _build_outcome(record, kind))
+
+
+@router.get("/reviews/{review_id}/documents/{kind}")
+async def patient_outcome_document(
+    review_id: str,
+    kind: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> Response:
+    """The patient's copy of the same document, addressed by review id rather than the token."""
+    record = await reviews.get_review_for_patient(current_user.user_id, review_id)
+    return _pdf_response(*await _build_outcome(record, kind))
+
+
+async def _build_outcome(record: dict, kind: str) -> tuple[str, bytes]:
+    run = await cosmos_repo.get_run(record["userId"], record["runId"])
+    patient_name = record.get("patientName") or await patients.display_name(record["userId"])
+    return doctor_pdf.build_outcome_document(run, record, kind, patient_name)
+
+
 @router.get("/reviews/{token}", response_class=HTMLResponse)
 async def review_page(token: str) -> HTMLResponse:
     """Anonymous confirm page. Reading it records nothing."""
@@ -109,14 +154,122 @@ async def review_page(token: str) -> HTMLResponse:
 
 
 @router.post("/reviews/{token}/decision", response_class=HTMLResponse)
-async def submit_decision(
-    token: str,
-    decision: str = Form(...),
-    notes: str = Form(""),
-) -> HTMLResponse:
-    """The confirm page's form target: the only route that writes a verdict."""
-    record = await reviews.record_decision(token, decision=decision, notes=notes)
+async def submit_decision(token: str, request: Request) -> HTMLResponse:
+    """The confirm page's form target: the only route that writes a verdict.
+
+    Field names are `decision-<lineId>`, one per medicine, so the clinician answers each line
+    individually instead of accepting or rejecting the whole summary.
+    """
+    form = await request.form()
+    decisions = {
+        key[len("decision-") :]: str(value)
+        for key, value in form.items()
+        if key.startswith("decision-")
+    }
+    record = await reviews.record_decision(
+        token, decisions=decisions, notes=str(form.get("notes", ""))
+    )
     return HTMLResponse(_page(token, record))
+
+
+def _named(name: str, maker: str) -> str:
+    """Medicine name first, its maker in brackets after it - the name is what gets dispensed."""
+    suffix = f' <span class="maker">({html.escape(maker)})</span>' if maker else ""
+    return f"<strong>{html.escape(name)}</strong>{suffix}"
+
+
+def _alternative_cell(line: dict) -> str:
+    """What the clinician is actually being asked about: the switch, priced and sourced."""
+    alternative = line.get("alternative")
+    if not alternative:
+        return '<span class="none">No equivalent found - confirm as read</span>'
+
+    savings = line.get("savingsPct") or 0
+    price = ""
+    if line.get("originalMrpInr") and line.get("cheaperMrpInr"):
+        price = (
+            f'<span class="price">&#8377;{line["originalMrpInr"]:.2f} &rarr; '
+            f'&#8377;{line["cheaperMrpInr"]:.2f}'
+            f'{f" &middot; about {savings}% less" if savings else ""}</span>'
+        )
+    return _named(alternative, line.get("alternativeMaker", "")) + price
+
+
+def _decide_form(token: str, lines: list[dict]) -> str:
+    """One radio group per medicine. Nothing defaults to approved - every line is an explicit choice."""
+    rows = ""
+    for line in lines:
+        line_id = html.escape(line["lineId"])
+        # `title` carries the full wording the icon stands for, since the icon alone is ambiguous.
+        picks = "".join(
+            f'<label class="pick c-{value}" title="{label}"><input type="radio" required '
+            f'name="decision-{line_id}" value="{value}" aria-label="{label} {html.escape(line["label"])}">'
+            f'<span aria-hidden="true">{symbol}</span></label>'
+            for value, label, symbol in _DECISION_OPTIONS
+        )
+        rows += (
+            f'<tr><td class="medName">{_named(line["label"], line.get("maker", ""))}</td>'
+            f"<td>{_alternative_cell(line)}</td>"
+            f'<td class="picks">{picks}</td></tr>'
+        )
+
+    return f"""
+    <form method="post" action="/api/v1/reviews/{html.escape(token)}/decision">
+      <p class="lead">Choose one option for each medicine.</p>
+      <div class="scroll">
+        <table class="meds">
+          <thead><tr><th>Current medicine</th><th>Health IQ alternative</th><th>Decision</th></tr></thead>
+          <tbody>{rows}</tbody>
+        </table>
+      </div>
+      <p class="key">
+        <span class="chip c-approved">&#10003;</span> Approve
+        <span class="chip c-changes_requested">&#9998;</span> Request change
+        <span class="chip c-rejected">&#10007;</span> Do not approve
+      </p>
+      <label for="notes">Notes for the patient (optional)</label>
+      <textarea id="notes" name="notes" rows="3"
+                placeholder="e.g. Continue the current brand for now; we will review at the next visit."></textarea>
+      <div class="row"><button class="primary" type="submit">Record my decision</button></div>
+      <p class="fine">Nothing is recorded until you submit this form.</p>
+    </form>"""
+
+
+def _outcome_links(token: str, record: dict) -> str:
+    kinds = {entry["decision"] for entry in record.get("decisions", [])}
+    available = [
+        kind
+        for kind, decisions in (("approved", {"approved"}), ("followup", {"changes_requested", "rejected"}))
+        if kinds & decisions
+    ]
+    links = "".join(
+        f'<a class="doc" href="/api/v1/reviews/{html.escape(token)}/prescription/{kind}" '
+        f'target="_blank" rel="noopener">{_DOCUMENT_COPY[kind]}</a> '
+        for kind in available
+    )
+    return f"<p><strong>Documents generated for the patient:</strong></p><p>{links}</p>" if links else ""
+
+
+def _decided_summary(record: dict) -> str:
+    proposals = {entry["lineId"]: entry for entry in record.get("lines", [])}
+    rows = ""
+    for entry in record.get("decisions", []):
+        decision = entry["decision"]
+        label = _DECISION_LABELS.get(decision, decision)
+        proposal = proposals.get(entry["lineId"], {})
+        rows += (
+            f'<tr><td class="medName">{_named(entry["label"], proposal.get("maker", ""))}</td>'
+            f"<td>{_alternative_cell(proposal)}</td>"
+            f'<td class="picks"><span class="verdict c-{html.escape(decision)}" title="{label}">'
+            f'<span aria-hidden="true">{_DECISION_SYMBOLS.get(decision, "")}</span> {label}</span></td></tr>'
+        )
+    if not rows:
+        return ""
+    return (
+        '<div class="scroll"><table class="meds">'
+        "<thead><tr><th>Current medicine</th><th>Health IQ alternative</th><th>Your decision</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table></div>"
+    )
 
 
 def _page(token: str, record: dict) -> str:
@@ -124,28 +277,29 @@ def _page(token: str, record: dict) -> str:
     status = record["status"]
     label, ink, wash = _STATUS_COPY.get(status, _STATUS_COPY["pending"])
     doctor = html.escape(record["doctorName"])
-    medicines = "".join(f"<li>{html.escape(name)}</li>" for name in record.get("medicines", []))
+    patient = html.escape(record.get("patientName") or "not given")
+    lines = record.get("lines") or []
     document_url = f"/api/v1/reviews/{html.escape(token)}/document"
 
     if status == "pending":
-        action = f"""
-        <form method="post" action="/api/v1/reviews/{html.escape(token)}/decision">
-          <label for="notes">Notes for the patient (optional)</label>
-          <textarea id="notes" name="notes" rows="4"
-                    placeholder="e.g. Continue the current brand for now; we will review at the next visit."></textarea>
-          <div class="row">
-            <button class="primary" type="submit" name="decision" value="approved">Approve</button>
-            <button type="submit" name="decision" value="changes_requested">Request changes</button>
-            <button class="danger" type="submit" name="decision" value="rejected">Do not approve</button>
-          </div>
-          <p class="fine">Nothing is recorded until you choose one of the buttons above.</p>
-        </form>"""
+        body = (
+            f'<p class="who">Patient: <strong>{patient}</strong></p>'
+            "<p><strong>Medicines the patient uploaded:</strong></p>"
+            f'<ul>{"".join(f"<li>{html.escape(name)}</li>" for name in record.get("medicines", []))}</ul>'
+            f'<a class="doc" href="{document_url}" target="_blank" rel="noopener">Open the full review PDF</a>'
+            f"{_decide_form(token, lines)}"
+        )
     else:
         decided = html.escape((record.get("decidedAt") or "")[:16].replace("T", " "))
         note = html.escape(record.get("notes") or "")
-        action = f"""
-        <p class="done">Recorded on {decided} UTC. The patient can now see this in their app.</p>
-        {f'<blockquote>{note}</blockquote>' if note else ''}"""
+        body = (
+            f'<p class="who">Patient: <strong>{patient}</strong></p>'
+            "<p><strong>Your decision:</strong></p>"
+            f"{_decided_summary(record)}"
+            f'<p class="done">Recorded on {decided} UTC. The patient can now see this in their app.</p>'
+            f"{f'<blockquote>{note}</blockquote>' if note else ''}"
+            f"{_outcome_links(token, record)}"
+        )
 
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -162,16 +316,53 @@ def _page(token: str, record: dict) -> str:
  .pill {{ display:inline-block; padding:4px 12px; border-radius:999px; font-size:.8rem;
         font-weight:600; color:{ink}; background:{wash}; }}
  ul {{ padding-left:20px; }}
- a.doc {{ display:inline-block; margin:14px 0 22px; padding:10px 16px; border-radius:8px;
+ .who {{ color:#334155; margin:0 0 14px; }}
+ a.doc {{ display:inline-block; margin:14px 8px 22px 0; padding:10px 16px; border-radius:8px;
         background:#0f766e; color:#fff; text-decoration:none; font-weight:600; }}
  textarea {{ width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px;
         font:inherit; box-sizing:border-box; }}
  label {{ display:block; font-weight:600; margin:18px 0 6px; }}
+ .lead {{ font-weight:600; margin:18px 0 8px; }}
+ .scroll {{ overflow-x:auto; }}
+ table.meds {{ width:100%; border-collapse:collapse; font-size:.85rem; }}
+ table.meds th {{ text-align:left; font-size:.75rem; text-transform:uppercase; letter-spacing:.04em;
+        color:#64748b; border-bottom:1px solid #e2e8f0; padding:0 10px 6px 0; white-space:nowrap; }}
+ table.meds td {{ border-bottom:1px solid #f1f5f9; padding:10px 10px 10px 0; vertical-align:middle; }}
+ table.meds td:last-child, table.meds th:last-child {{ padding-right:0; text-align:right;
+        white-space:nowrap; }}
+ .medName {{ font-weight:600; }}
+ .maker {{ font-weight:400; color:#64748b; }}
+ .price {{ display:block; color:#64748b; font-size:.78rem; }}
+ .none {{ color:#94a3b8; }}
+ .picks {{ white-space:nowrap; }}
+ .picks label.pick + label.pick {{ margin-left:6px; }}
+ label.pick {{ position:relative; display:inline-flex; align-items:center; justify-content:center;
+        margin:0; width:30px; height:30px; border:1px solid #cbd5e1; border-radius:50%;
+        cursor:pointer; font-size:.9rem; line-height:1; color:#475569; }}
+ label.pick input {{ position:absolute; opacity:0; width:0; height:0; }}
+ label.pick:hover {{ border-color:#94a3b8; background:#f8fafc; }}
+ label.pick:has(input:focus-visible) {{ outline:2px solid #1d4ed8; outline-offset:2px; }}
+ label.pick:has(input:checked) {{ color:#fff; }}
+ .c-approved:has(input:checked) {{ background:#16a34a; border-color:#16a34a; }}
+ .c-changes_requested:has(input:checked) {{ background:#d97706; border-color:#d97706; }}
+ .c-rejected:has(input:checked) {{ background:#dc2626; border-color:#dc2626; }}
+ .key {{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:10px 0 0;
+        color:#64748b; font-size:.8rem; }}
+ .key .chip {{ display:inline-flex; align-items:center; justify-content:center; width:20px;
+        height:20px; border-radius:50%; color:#fff; font-size:.75rem; margin-left:10px; }}
+ .key .chip:first-child {{ margin-left:0; }}
+ .chip.c-approved {{ background:#16a34a; }}
+ .chip.c-changes_requested {{ background:#d97706; }}
+ .chip.c-rejected {{ background:#dc2626; }}
+ .verdict {{ display:inline-flex; align-items:center; gap:6px; padding:3px 10px;
+        border-radius:999px; font-size:.78rem; font-weight:600; background:#e2e8f0; }}
+ .verdict.c-approved {{ color:#166534; background:#dcfce7; }}
+ .verdict.c-changes_requested {{ color:#b45309; background:#fef3c7; }}
+ .verdict.c-rejected {{ color:#b91c1c; background:#fee2e2; }}
  .row {{ display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }}
  button {{ padding:10px 18px; border-radius:8px; border:1px solid #cbd5e1; background:#fff;
         font:inherit; font-weight:600; cursor:pointer; }}
  button.primary {{ background:#16a34a; border-color:#16a34a; color:#fff; }}
- button.danger {{ color:#b91c1c; border-color:#fca5a5; }}
  .fine, footer {{ color:#64748b; font-size:.85rem; }}
  .done {{ font-weight:600; }}
  blockquote {{ border-left:3px solid #cbd5e1; margin:12px 0; padding-left:12px; color:#334155; }}
@@ -181,10 +372,7 @@ def _page(token: str, record: dict) -> str:
   <span class="pill">{label}</span>
   <h1>Medicine review request</h1>
   <p class="sub">For {doctor}. This is a request for your opinion, not a prescription change.</p>
-  <p><strong>Medicines the patient uploaded:</strong></p>
-  <ul>{medicines or '<li>See the attached document.</li>'}</ul>
-  <a class="doc" href="{document_url}" target="_blank" rel="noopener">Open the full review PDF</a>
-  {action}
+  {body}
   <footer>Health IQ does not diagnose or prescribe. Any lower-cost equivalent shown in the PDF is
   an estimate from curated public price data and is only presented to the patient as approved once
   you confirm it here.</footer>
