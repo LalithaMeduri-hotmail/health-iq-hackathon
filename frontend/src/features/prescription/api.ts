@@ -7,6 +7,7 @@ import { ApiError, apiClient } from '@/lib/apiClient';
 import type { ApiResponse } from '@/lib/types';
 
 import type {
+  MedicineCatalogResponse,
   MedicineCorrectionInput,
   MedicineEntity,
   MedicinesAlternativesResponse,
@@ -70,6 +71,11 @@ export async function fetchAlternatives(
       })),
   };
   return apiClient.post<MedicinesAlternativesResponse>('/api/v1/medicines/alternatives', payload);
+}
+
+/** Curated medicine list backing the manual-entry picker; the user may only pick from it. */
+export async function fetchMedicineCatalog(): Promise<ApiResponse<MedicineCatalogResponse>> {
+  return apiClient.get<MedicineCatalogResponse>('/api/v1/medicines/catalog?limit=200');
 }
 
 export { ApiError };

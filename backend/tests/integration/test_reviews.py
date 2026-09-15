@@ -13,12 +13,13 @@ from app.repositories import sql_repo
 from app.services import email, reviews
 
 
-def _analyzed_run_id(client) -> str:
+def _analyzed_run_id(client, *medicines: str) -> str:
+    lines = medicines or ("Glycomet 500mg 1-0-1 x10 days",)
     response = client.post(
         "/api/v1/prescriptions/analyze",
         data={
             "consent": "true",
-            "manualMedicines": json.dumps([{"rawText": "Glycomet 500mg 1-0-1 x10 days"}]),
+            "manualMedicines": json.dumps([{"rawText": text} for text in lines]),
         },
     )
     assert response.status_code == 200
@@ -76,6 +77,80 @@ async def test_opening_the_link_records_nothing(client, monkeypatch) -> None:
     assert sql_repo._DEMO_DOCTOR_REVIEWS[reviews._hash(token)]["status"] == "pending"
 
 
+async def test_every_medicine_gets_its_own_set_of_options(client, monkeypatch) -> None:
+    monkeypatch.setattr(email, "send", _noop_send)
+    token = await _issue(_analyzed_run_id(client))
+
+    page = client.get(f"/api/v1/reviews/{token}").text
+
+    assert 'name="decision-li-1" value="approved"' in page
+    assert 'name="decision-li-1" value="changes_requested"' in page
+    assert 'name="decision-li-1" value="rejected"' in page
+
+
+async def test_the_doctor_decides_on_the_proposed_switch(client, monkeypatch) -> None:
+    monkeypatch.setattr(email, "send", _noop_send)
+    token = await _issue(_analyzed_run_id(client))
+
+    page = client.get(f"/api/v1/reviews/{token}").text
+
+    assert "<th>Current medicine</th><th>Health IQ alternative</th>" in page
+    # Medicine name first, its maker after it in brackets and not bold.
+    assert '<strong>Metfor 500 mg</strong> <span class="maker">(Cipla Ltd)</span>' in page
+    assert '<strong>Glycomet 500mg</strong> <span class="maker">(USV Pvt Ltd)</span>' in page
+    assert "about 42% less" in page
+    # The icon alone is ambiguous, so each button carries its wording for hover and screen readers.
+    assert 'title="Approve"' in page
+    assert 'aria-label="Do not approve Glycomet 500mg"' in page
+
+
+def test_the_request_carries_the_patient_name_from_the_prescription(client, monkeypatch) -> None:
+    monkeypatch.setattr(email, "send", _noop_send)
+    run_id = _analyzed_run_id(client)
+
+    response = client.post(
+        "/api/v1/reviews/request",
+        json={"runId": run_id, "doctorIds": ["doc-001"], "patientName": "Ramesh Kumar"},
+    )
+
+    assert response.status_code == 200
+    stored = next(iter(sql_repo._DEMO_DOCTOR_REVIEWS.values()))
+    assert stored["patientName"] == "Ramesh Kumar"
+
+
+async def test_the_new_prescription_is_named_after_the_patient(client, monkeypatch) -> None:
+    monkeypatch.setattr(email, "send", _noop_send)
+    run_id = _analyzed_run_id(client)
+    client.post(
+        "/api/v1/reviews/request",
+        json={"runId": run_id, "doctorIds": ["doc-001"], "patientName": "Ramesh Kumar"},
+    )
+    token_hash, stored = next(iter(sql_repo._DEMO_DOCTOR_REVIEWS.items()))
+    await sql_repo.record_doctor_decision(
+        token_hash,
+        status="approved",
+        notes="",
+        decided_at="2026-09-15T10:00:00+00:00",
+        decisions=[{"lineId": "li-1", "label": "Glycomet 500mg", "decision": "approved"}],
+    )
+
+    response = client.get(f"/api/v1/reviews/{stored['reviewId']}/documents/approved")
+
+    assert response.status_code == 200
+    assert "HealthIQ-Prescription-Ramesh-Kumar" in response.headers["content-disposition"]
+
+
+async def test_a_missing_medicine_verdict_is_rejected(client, monkeypatch) -> None:
+    monkeypatch.setattr(email, "send", _noop_send)
+    run_id = _analyzed_run_id(client)
+    token = await _issue(run_id)
+
+    response = client.post(f"/api/v1/reviews/{token}/decision", data={"notes": ""})
+
+    assert response.status_code == 400
+    assert sql_repo._DEMO_DOCTOR_REVIEWS[reviews._hash(token)]["status"] == "pending"
+
+
 async def test_doctor_approval_is_visible_to_the_patient(client, monkeypatch) -> None:
     monkeypatch.setattr(email, "send", _noop_send)
     run_id = _analyzed_run_id(client)
@@ -83,7 +158,7 @@ async def test_doctor_approval_is_visible_to_the_patient(client, monkeypatch) ->
 
     decision = client.post(
         f"/api/v1/reviews/{token}/decision",
-        data={"decision": "approved", "notes": "Fine to switch at the next refill."},
+        data={"decision-li-1": "approved", "notes": "Fine to switch at the next refill."},
     )
     assert decision.status_code == 200
     assert "Approved" in decision.text
@@ -93,6 +168,70 @@ async def test_doctor_approval_is_visible_to_the_patient(client, monkeypatch) ->
     assert body["approved"] is True
     assert body["reviews"][0]["status"] == "approved"
     assert body["reviews"][0]["notes"] == "Fine to switch at the next refill."
+    assert body["reviews"][0]["decisions"] == [
+        {"lineId": "li-1", "label": "Glycomet 500mg", "decision": "approved"}
+    ]
+
+
+async def test_a_partly_approved_review_is_not_approved_overall(client, monkeypatch) -> None:
+    monkeypatch.setattr(email, "send", _noop_send)
+    run_id = _analyzed_run_id(client, "Glycomet 500mg 1-0-1 x10 days", "Amlong 5mg 0-0-1 x30 days")
+    token = await _issue(run_id)
+
+    client.post(
+        f"/api/v1/reviews/{token}/decision",
+        data={"decision-li-1": "approved", "decision-li-2": "rejected", "notes": ""},
+    )
+
+    body = client.get("/api/v1/reviews", params={"runId": run_id}).json()["data"]
+    assert body["reviews"][0]["status"] == "changes_requested"
+    assert body["approved"] is False
+
+
+async def test_each_verdict_group_becomes_its_own_health_iq_document(client, monkeypatch) -> None:
+    monkeypatch.setattr(email, "send", _noop_send)
+    run_id = _analyzed_run_id(client, "Glycomet 500mg 1-0-1 x10 days", "Amlong 5mg 0-0-1 x30 days")
+    token = await _issue(run_id)
+    review_id = sql_repo._DEMO_DOCTOR_REVIEWS[reviews._hash(token)]["reviewId"]
+
+    client.post(
+        f"/api/v1/reviews/{token}/decision",
+        data={"decision-li-1": "approved", "decision-li-2": "changes_requested", "notes": "Halve the dose."},
+    )
+
+    for kind in ("approved", "followup"):
+        doctor_copy = client.get(f"/api/v1/reviews/{token}/prescription/{kind}")
+        patient_copy = client.get(f"/api/v1/reviews/{review_id}/documents/{kind}")
+        assert doctor_copy.status_code == 200
+        assert doctor_copy.content.startswith(b"%PDF")
+        assert patient_copy.status_code == 200
+        assert patient_copy.content.startswith(b"%PDF")
+        assert "HealthIQ-" in patient_copy.headers["content-disposition"]
+
+
+async def test_a_document_with_no_medicines_in_it_is_not_offered(client, monkeypatch) -> None:
+    monkeypatch.setattr(email, "send", _noop_send)
+    token = await _issue(_analyzed_run_id(client))
+
+    page = client.post(f"/api/v1/reviews/{token}/decision", data={"decision-li-1": "approved", "notes": ""})
+
+    assert "/prescription/approved" in page.text
+    assert "/prescription/followup" not in page.text
+    assert client.get(f"/api/v1/reviews/{token}/prescription/followup").status_code == 404
+
+
+async def test_another_patient_cannot_read_a_review_document(client, monkeypatch) -> None:
+    monkeypatch.setattr(email, "send", _noop_send)
+    token = await _issue(_analyzed_run_id(client))
+    review_id = sql_repo._DEMO_DOCTOR_REVIEWS[reviews._hash(token)]["reviewId"]
+    client.post(f"/api/v1/reviews/{token}/decision", data={"decision-li-1": "approved", "notes": ""})
+
+    response = client.get(
+        f"/api/v1/reviews/{review_id}/documents/approved",
+        headers={"X-Demo-User-Id": "someone-else"},
+    )
+
+    assert response.status_code == 404
 
 
 async def test_a_decision_cannot_be_overwritten(client, monkeypatch) -> None:
@@ -100,8 +239,8 @@ async def test_a_decision_cannot_be_overwritten(client, monkeypatch) -> None:
     run_id = _analyzed_run_id(client)
     token = await _issue(run_id)
 
-    client.post(f"/api/v1/reviews/{token}/decision", data={"decision": "approved", "notes": ""})
-    second = client.post(f"/api/v1/reviews/{token}/decision", data={"decision": "rejected", "notes": ""})
+    client.post(f"/api/v1/reviews/{token}/decision", data={"decision-li-1": "approved", "notes": ""})
+    second = client.post(f"/api/v1/reviews/{token}/decision", data={"decision-li-1": "rejected", "notes": ""})
 
     assert second.status_code == 400
     status = client.get("/api/v1/reviews", params={"runId": run_id}).json()["data"]
@@ -140,8 +279,11 @@ async def _issue(run_id: str) -> str:
     """Mint a review token directly, since the emailed token is never persisted in the clear."""
     import secrets
 
+    from app.repositories import cosmos_repo
     from app.repositories import sql_repo as repo
+    from app.services import doctor_pdf
 
+    run = await cosmos_repo.get_run("demo-user", run_id)
     token = secrets.token_urlsafe(16)
     await repo.create_doctor_review(
         reviews._hash(token),
@@ -149,11 +291,15 @@ async def _issue(run_id: str) -> str:
             "reviewId": token[:8],
             "userId": "demo-user",
             "runId": run_id,
+            "patientName": "Ramesh Kumar",
             "doctorId": "doc-001",
             "doctorName": "Dr. Debopriya Dutta",
             "doctorSpecialty": "General Physician",
+            "doctorRegistrationNo": "DEMO-GP-1001",
             "doctorEmailMasked": "d***@gmail.com",
-            "medicines": ["Glycomet 500mg"],
+            "medicines": doctor_pdf.medicine_names(run),
+            "lines": doctor_pdf.medicine_lines(run),
+            "decisions": [],
             "pdfFilename": "HealthIQ-Medicine-Review-Glycomet-2026-09-09.pdf",
             "status": "pending",
             "notes": "",

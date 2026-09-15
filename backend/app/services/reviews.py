@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 
 from app.config import get_settings
 from app.errors import GoneError, NotFoundError, ValidationError
-from app.models.review import ReviewSummary
+from app.models.review import MedicineVerdict, ReviewSummary
 from app.repositories import sql_repo
 from app.services import doctors, email
 
@@ -36,6 +36,7 @@ def _summary(record: dict, review_id: str = "") -> ReviewSummary:
         decidedAt=record.get("decidedAt"),
         notes=record.get("notes") or None,
         delivery=record.get("delivery", "sent"),
+        decisions=[MedicineVerdict.model_validate(entry) for entry in record.get("decisions", [])],
     )
 
 
@@ -69,12 +70,19 @@ async def request_reviews(
     run_id: str,
     doctor_ids: list[str],
     medicines: list[str],
+    lines: list[dict],
+    patient_name: str,
     pdf_filename: str,
     pdf_bytes: bytes,
 ) -> list[ReviewSummary]:
     """Create one tokenised review per clinician and email each of them the PDF."""
     if not doctor_ids:
         raise ValidationError("Pick at least one doctor to send this to")
+    if not patient_name.strip():
+        raise ValidationError(
+            "Add the patient name exactly as it appears on the prescription",
+            errors=[{"field": "patientName", "issue": "required"}],
+        )
 
     settings = get_settings()
     expires_at = (datetime.now(UTC) + timedelta(hours=settings.review_link_ttl_hours)).isoformat()
@@ -96,11 +104,15 @@ async def request_reviews(
             "reviewId": token[:8],
             "userId": user_id,
             "runId": run_id,
+            "patientName": patient_name.strip(),
             "doctorId": doctor.doctor_id,
             "doctorName": doctor.name,
             "doctorSpecialty": doctor.specialty,
+            "doctorRegistrationNo": doctor.registration_no,
             "doctorEmailMasked": doctor.email_masked,
             "medicines": medicines,
+            "lines": lines,
+            "decisions": [],
             "pdfFilename": pdf_filename,
             "status": "pending",
             "notes": "",
@@ -125,20 +137,60 @@ async def get_review(token: str) -> dict:
     return record
 
 
-async def record_decision(token: str, *, decision: str, notes: str) -> dict:
-    """Record the clinician's verdict. A review that already has one cannot be overwritten."""
-    if decision not in _DECISIONS:
-        raise ValidationError(f"{decision!r} is not a valid decision")
+def _overall_status(decisions: list[dict]) -> str:
+    """One review-level status from the per-medicine verdicts, worst outcome first.
 
+    A patient acting on a summary needs the weakest verdict to be the headline: any medicine the
+    clinician did not approve as read means the summary as a whole is not approved.
+    """
+    verdicts = {entry["decision"] for entry in decisions}
+    if verdicts == {"approved"}:
+        return "approved"
+    if verdicts == {"rejected"}:
+        return "rejected"
+    return "changes_requested"
+
+
+async def record_decision(token: str, *, decisions: dict[str, str], notes: str) -> dict:
+    """Record the clinician's per-medicine verdicts. A decided review cannot be overwritten."""
     record = await get_review(token)
     if record["status"] != "pending":
         raise ValidationError("A decision has already been recorded for this review")
 
+    lines = record.get("lines") or []
+    if not lines:
+        raise ValidationError("This review has no medicines to decide on")
+
+    resolved: list[dict] = []
+    for line in lines:
+        decision = decisions.get(line["lineId"])
+        if decision is None:
+            raise ValidationError(f"Choose an option for {line['label']}")
+        if decision not in _DECISIONS:
+            raise ValidationError(f"{decision!r} is not a valid decision")
+        resolved.append({"lineId": line["lineId"], "label": line["label"], "decision": decision})
+
     decided_at = datetime.now(UTC).isoformat()
     await sql_repo.record_doctor_decision(
-        _hash(token), status=decision, notes=notes.strip()[:1000], decided_at=decided_at
+        _hash(token),
+        status=_overall_status(resolved),
+        notes=notes.strip()[:1000],
+        decided_at=decided_at,
+        decisions=resolved,
     )
     return await sql_repo.get_doctor_review(_hash(token)) or record
+
+
+async def get_review_for_patient(user_id: str, review_id: str) -> dict:
+    """The patient's own copy of one review, by short id and scoped by `userId`.
+
+    The emailed token is the clinician's credential and is never shown to the patient, so their
+    app addresses a review by `reviewId` instead.
+    """
+    record = await sql_repo.find_doctor_review(user_id, review_id)
+    if record is None:
+        raise NotFoundError("No such review")
+    return record
 
 
 async def list_for_run(user_id: str, run_id: str) -> list[ReviewSummary]:

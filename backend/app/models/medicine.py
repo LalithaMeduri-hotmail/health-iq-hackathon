@@ -57,6 +57,8 @@ class PrescriptionAnalyzeResponse(BaseModel):
     items: list[MedicineEntity]
     needs_confirmation: list[MedicineEntity] = Field(alias="needsConfirmation", default_factory=list)
     disclaimers: list[str] = Field(default_factory=list)
+    # Read off the uploaded prescription header to pre-fill the review form; not stored.
+    patient_name: str | None = Field(alias="patientName", default=None)
 
 
 class MedicineCorrection(BaseModel):
@@ -126,4 +128,23 @@ class MedicinesAlternativesResponse(BaseModel):
 
     alternatives: list[AlternativeMedicine]
     unmatched: list[str] = Field(default_factory=list)
+
+
+class MedicineCatalogItem(BaseModel):
+    """One selectable catalog entry backing the manual-entry medicine picker (FR1.1)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    label: str
+    brand_name: str = Field(alias="brandName")
+    active_ingredient: str = Field(alias="activeIngredient")
+    strength_value: float = Field(alias="strengthValue")
+    strength_unit: str = Field(alias="strengthUnit")
+    dosage_form: str = Field(alias="dosageForm")
+
+
+class MedicineCatalogResponse(BaseModel):
+    """`GET /api/v1/medicines/catalog` response `data`."""
+
+    items: list[MedicineCatalogItem]
 

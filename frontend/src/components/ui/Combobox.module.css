@@ -53,6 +53,12 @@
   background: transparent;
 }
 
+/* The wrapper already renders the focus ring via `.control:focus-within`; without this the
+   global `:focus-visible` rule draws a second ring inside it. */
+.input:focus-visible {
+  box-shadow: none;
+}
+
 .input::placeholder {
   color: var(--color-ink-300);
 }

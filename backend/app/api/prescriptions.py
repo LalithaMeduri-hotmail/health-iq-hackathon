@@ -24,7 +24,7 @@ from app.models.medicine import (
     PrescriptionConfirmResponse,
 )
 from app.repositories import cosmos_repo
-from app.services import blob, document_type
+from app.services import blob, deidentify, document_type
 from app.services.normalize_medicine import apply_correction
 from app.services.ocr import OcrEnvelope, OcrLine
 from app.services.ocr import extract as ocr_extract
@@ -71,6 +71,7 @@ async def analyze(
     blob_path: str | None = None
     file_lines: list[OcrLine] = []
     handwritten_ratio = 0.0
+    detected_patient_name: str | None = None
     if file is not None:
         content = await file.read()
         blob_path = await blob.upload_raw(
@@ -100,6 +101,9 @@ async def analyze(
 
         file_lines = file_envelope.lines
         handwritten_ratio = file_envelope.handwritten_ratio
+        detected_patient_name = deidentify.find_patient_name(
+            "\n".join(line.text for line in file_lines)
+        )
 
     combined_envelope = OcrEnvelope(
         pages=1, lines=file_lines + manual_lines, tables=[], handwritten_ratio=handwritten_ratio
@@ -157,6 +161,7 @@ async def analyze(
         items=analysis.items,
         needsConfirmation=[],
         disclaimers=analysis.disclaimers,
+        patientName=detected_patient_name,
     )
     notes = list(result.safety_notes)
     if unverified_type:

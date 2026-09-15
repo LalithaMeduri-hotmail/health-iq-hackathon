@@ -20,6 +20,26 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("NAME", _NAME_RE),
 )
 
+# `Dr` is excluded: a prescription names the prescriber too, and offering the clinician's name
+# back to the patient as "your name" would be worse than asking them to type it.
+_PATIENT_NAME_RE = re.compile(
+    r"\b(?:Patient(?:'s)?(?:\s+Name)?|Name|Mr|Mrs|Ms)\.?\s*[:\-]?[ \t]*"
+    r"([A-Z][a-zA-Z]+(?:[ \t]+[A-Z][a-zA-Z]+){0,2})"
+)
+
+
+def find_patient_name(text: str) -> str | None:
+    """Best-effort patient name off a prescription header, for pre-filling a form field only.
+
+    Never persisted or sent to a model from here: the caller offers it back to the patient, who
+    confirms or corrects it before it is used on any document.
+    """
+    match = _PATIENT_NAME_RE.search(text)
+    if match is None:
+        return None
+    name = " ".join(match.group(1).split())
+    return name or None
+
 
 def deidentify(text: str) -> tuple[str, dict[str, str]]:
     """Redact PHI from `text`.

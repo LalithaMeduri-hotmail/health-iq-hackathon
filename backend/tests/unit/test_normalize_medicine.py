@@ -5,7 +5,12 @@ network-free tests for strength parsing, fuzzy matching, and savings math).
 import pytest
 
 from app.models.medicine import MedicineCorrection, MedicineEntity
-from app.services.normalize_medicine import apply_correction, find_alternatives, normalize
+from app.services.normalize_medicine import (
+    apply_correction,
+    catalog_options,
+    find_alternatives,
+    normalize,
+)
 from app.services.ocr import OcrEnvelope, OcrLine
 
 
@@ -189,3 +194,24 @@ def test_apply_correction_clears_confirmation_and_resolves_catalog() -> None:
     assert corrected.active_ingredient == "Amlodipine"
     assert corrected.needs_user_confirmation is False
     assert corrected.match_score == 1.0
+
+
+def test_catalog_options_matches_brand_and_ingredient_prefix_first() -> None:
+    options = catalog_options("met")
+
+    labels = [option["label"] for option in options]
+    assert "Metfor 500 mg tablet" in labels
+    assert "Glycomet 500 mg tablet" in labels  # matched via its Metformin ingredient
+    assert labels.index("Metfor 500 mg tablet") < labels.index("Glycomet 500 mg tablet")
+
+
+def test_catalog_options_are_deduplicated_and_limited() -> None:
+    options = catalog_options(limit=3)
+
+    labels = [option["label"] for option in options]
+    assert len(labels) == 3
+    assert len(set(labels)) == 3
+
+
+def test_catalog_options_returns_nothing_for_unknown_medicine() -> None:
+    assert catalog_options("notarealmedicine") == []

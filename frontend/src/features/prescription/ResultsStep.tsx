@@ -6,7 +6,6 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { Badge, Button, Card, LoadingState } from '@/components/ui';
-import { DoctorPdfCard } from '@/features/share/DoctorPdfCard';
 import { DoctorReviewCard } from '@/features/share/DoctorReviewCard';
 import { fetchReviewStatus } from '@/features/share/api';
 
@@ -18,6 +17,7 @@ interface ResultsStepProps {
   runId: string;
   ocrConfidence: number;
   items: MedicineEntity[];
+  patientName: string | null;
   onStartOver: () => void;
 }
 
@@ -77,7 +77,7 @@ function MedicineAlternatives({ item, isApproved }: { item: MedicineEntity; isAp
   );
 }
 
-export function ResultsStep({ runId, ocrConfidence, items, onStartOver }: ResultsStepProps) {
+export function ResultsStep({ runId, ocrConfidence, items, patientName, onStartOver }: ResultsStepProps) {
   const reviewQuery = useQuery({ queryKey: ['reviews', runId], queryFn: () => fetchReviewStatus(runId) });
   const isApproved = reviewQuery.data?.data.approved ?? false;
 
@@ -100,22 +100,17 @@ export function ResultsStep({ runId, ocrConfidence, items, onStartOver }: Result
             {item.brandName ?? item.rawText}
             {item.strengthValue ? ` ${item.strengthValue}${item.strengthUnit ?? ''}` : ''}
           </h3>
-          <p className={styles.resultMeta}>
-            {item.frequency ?? '-'} &middot; {item.duration ?? '-'}
-          </p>
+          {(item.frequency || item.duration) && (
+            <p className={styles.resultMeta}>
+              {[item.frequency, item.duration].filter(Boolean).join(' \u00b7 ')}
+            </p>
+          )}
           <MedicineAlternatives item={item} isApproved={isApproved} />
         </Card>
       ))}
 
       <div className={styles.shareBlock}>
-        <DoctorReviewCard runId={runId} />
-      </div>
-
-      <div className={styles.shareBlock}>
-        <DoctorPdfCard
-          runId={runId}
-          subtitle="Download the review PDF, or send a 24-hour link to a doctor outside Health IQ."
-        />
+        <DoctorReviewCard runId={runId} detectedPatientName={patientName} />
       </div>
     </div>
   );

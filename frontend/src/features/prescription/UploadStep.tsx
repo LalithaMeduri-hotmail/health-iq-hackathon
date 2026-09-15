@@ -4,9 +4,11 @@
  */
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
-import { Button, Card, Input } from '@/components/ui';
+import { Button, Card, Combobox } from '@/components/ui';
 
+import { fetchMedicineCatalog } from './api';
 import styles from './prescription.module.css';
 
 interface UploadStepProps {
@@ -19,6 +21,13 @@ export function UploadStep({ onSubmit, isPending }: UploadStepProps) {
   const [manualLines, setManualLines] = useState<string[]>(['']);
   // Which path was submitted, so only that button shows the spinner.
   const [submittedPath, setSubmittedPath] = useState<'file' | 'manual' | null>(null);
+
+  const catalogQuery = useQuery({
+    queryKey: ['medicine-catalog'],
+    queryFn: fetchMedicineCatalog,
+    staleTime: Infinity,
+  });
+  const catalogOptions = catalogQuery.data?.data.items.map((item) => item.label) ?? [];
 
   const cleanedManualLines = manualLines.map((line) => line.trim()).filter(Boolean);
 
@@ -59,20 +68,33 @@ export function UploadStep({ onSubmit, isPending }: UploadStepProps) {
 
       {manualLines.map((line, index) => (
         <div className={styles.manualRow} key={index}>
-          <Input
+          <Combobox
             label={`Medicine ${index + 1}`}
-            placeholder="e.g. Glycomet 500mg 1-0-1 x10 days"
-            value={line}
-            onChange={(event) => {
-              const next = [...manualLines];
-              next[index] = event.target.value;
-              setManualLines(next);
+            options={catalogOptions}
+            value={line ? [line] : []}
+            onChange={(next) => {
+              const updated = [...manualLines];
+              updated[index] = next[0] ?? '';
+              setManualLines(updated);
             }}
+            placeholder={catalogQuery.isPending ? 'Loading medicines...' : 'Start typing, e.g. Gly'}
+            hint={
+              catalogQuery.isError
+                ? undefined
+                : 'Type a letter or two and pick from the list - only medicines in our catalog can be analyzed.'
+            }
+            error={catalogQuery.isError ? 'Could not load the medicine list. Please retry or upload your prescription instead.' : undefined}
           />
         </div>
       ))}
       <div className={styles.addRow}>
-        <Button type="button" variant="secondary" size="sm" onClick={() => setManualLines([...manualLines, ''])}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={manualLines.some((line) => !line)}
+          onClick={() => setManualLines([...manualLines, ''])}
+        >
           + Add another medicine
         </Button>
       </div>

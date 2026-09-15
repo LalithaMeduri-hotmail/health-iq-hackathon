@@ -26,6 +26,7 @@ export interface PrescriptionAnalyzeResponse {
   items: MedicineEntity[];
   needsConfirmation: MedicineEntity[];
   disclaimers: string[];
+  patientName: string | null;
 }
 
 export interface MedicineCorrectionInput {
@@ -56,4 +57,17 @@ export interface AlternativeMedicine {
 export interface MedicinesAlternativesResponse {
   alternatives: AlternativeMedicine[];
   unmatched: string[];
+}
+
+export interface MedicineCatalogItem {
+  label: string;
+  brandName: string;
+  activeIngredient: string;
+  strengthValue: number;
+  strengthUnit: string;
+  dosageForm: string;
+}
+
+export interface MedicineCatalogResponse {
+  items: MedicineCatalogItem[];
 }
