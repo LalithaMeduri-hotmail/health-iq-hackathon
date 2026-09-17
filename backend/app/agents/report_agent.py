@@ -1,9 +1,17 @@
 """`ReportAnalysisAgent` (implementation-plan.md Section 4.2). Owner: D3.
 
-Tools: `ocr_layout`, `normalize_lab`, `lookup_reference_range`, `search_reference_explanations`.
-Output: `ReportSummary`. Guardrails: use "possible concern"; never name a disease.
+Tools: `search_reference_ranges`. Output: `ReportSummary`.
+Guardrails: use "possible concern"; never name a disease.
+
+Statuses, the health score and the system cards stay deterministic - they are measurement, and a
+hallucinated number on a medical summary is the failure mode with real consequences. The
+*narrative* is written by a tool-calling agent that retrieves each out-of-range parameter's
+reference range from Search and cites it, so the explanation is grounded rather than templated.
+`build_narrative()` remains the fallback whenever the model or retrieval is unavailable.
 """
 
+from app.agents import llm
+from app.agents.tools import search_reference_ranges
 from app.errors import NotFoundError
 from app.models.report import (
     ABNORMAL_STATUSES,
@@ -132,20 +140,60 @@ def build_narrative(parameters: list[LabParameter], abnormal: list[LabParameter]
     return " ".join(sentences)
 
 
+def _format_range(parameter: LabParameter) -> str:
+    """The range printed on this person's own report, which the narrative must quote verbatim."""
+    if parameter.ref_low is not None and parameter.ref_high is not None:
+        return f"{parameter.ref_low}-{parameter.ref_high} {parameter.unit}"
+    if parameter.ref_high is not None:
+        return f"up to {parameter.ref_high} {parameter.unit}"
+    if parameter.ref_low is not None:
+        return f"at least {parameter.ref_low} {parameter.unit}"
+    return "not printed on the report"
+
+
+async def _explain(
+    parameters: list[LabParameter], abnormal: list[LabParameter], score: float
+) -> str | None:
+    """Let the agent retrieve each abnormal parameter's range and write the summary."""
+    if not parameters:
+        return None
+
+    findings = "; ".join(
+        f"{parameter.display_name} = {parameter.value} {parameter.unit} ({parameter.status}), "
+        f"range on this report {_format_range(parameter)}"
+        for parameter in abnormal
+    )
+    return await llm.with_tools(
+        instructions=llm.prompt("report_explainer"),
+        task=(
+            f"Parameters covered: {len(parameters)}. Outside typical range: {len(abnormal)}. "
+            f"Indicator score: {score}/100.\n"
+            f"Out-of-range findings: {findings or 'none'}.\n"
+            "Look up each out-of-range parameter with your tool, then write the summary."
+        ),
+        tools=[search_reference_ranges],
+        name="ReportExplainerAgent",
+    )
+
+
 async def run(payload: dict) -> ReportSummary:
     """`payload` is `{"parameters": list[LabParameter]}` - already normalized by `normalize_lab.py`.
 
-    All numbers (status, score, cards) stay deterministic; no LLM is required for this contract.
+    All numbers (status, score, cards) stay deterministic; only the narrative uses the model.
     """
     parameters: list[LabParameter] = payload["parameters"]
     parameters = [_with_meaning(parameter) for parameter in parameters]
     abnormal = [parameter for parameter in parameters if _is_abnormal(parameter)]
     score = health_score(parameters)
 
+    narrative = await _explain(parameters, abnormal, score) or build_narrative(
+        parameters, abnormal, score
+    )
+
     return ReportSummary(
         parameters=parameters,
         abnormal=abnormal,
         systemCards=build_system_cards(parameters),
         healthScore=score,
-        narrative=build_narrative(parameters, abnormal, score),
+        narrative=narrative,
     )

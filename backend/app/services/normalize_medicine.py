@@ -291,6 +291,26 @@ def find_alternatives(item: MedicineEntity) -> list[dict]:
     ]
 
 
+def resolve_brand(brand_candidate: str) -> tuple[str, float, dict | None]:
+    """Fuzzy-match a read brand name onto the curated catalog.
+
+    Shared by the regex reader and the LLM reader: whatever produced the name, the ingredient,
+    form and price it resolves to must come from the catalog, never from a model's memory.
+    Returns `(resolved_brand, score_0_to_1, catalog_row_or_None)`.
+    """
+    brand_names = [row["brandName"] for row in list_catalog()]
+    if not brand_candidate or not brand_names:
+        return brand_candidate, 0.0, None
+
+    best_match = process.extractOne(brand_candidate, brand_names, scorer=fuzz.token_set_ratio)
+    if best_match is None or best_match[1] < FUZZY_REVIEW_THRESHOLD:
+        return brand_candidate, (best_match[1] / 100 if best_match else 0.0), None
+
+    matched_brand, score = best_match[0], best_match[1]
+    row = next((row for row in list_catalog() if row["brandName"] == matched_brand), None)
+    return matched_brand, round(score / 100, 4), row
+
+
 def catalog_options(query: str | None = None, limit: int = 50) -> list[dict]:
     """Selectable `(brand, strength, form)` catalog entries for the manual-entry picker.
 

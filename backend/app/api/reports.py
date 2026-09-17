@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 
-from app.agents import orchestrator
+from app.agents import document_agent, orchestrator
 from app.agents.report_agent import score_breakdown
 from app.config import get_settings
 from app.deps import CurrentUser, get_current_user
@@ -68,10 +68,10 @@ async def analyze(
     unverified_type = False
 
     if envelope.was_read:
-        kind = document_type.classify(
+        verdict = await document_agent.classify(
             document_type.text_of([line.text for line in envelope.lines], envelope.tables)
         )
-        if kind != "lab_report":
+        if verdict.kind != "lab_report":
             raise WrongDocumentTypeError(
                 "This does not look like a lab report. Upload a lab report here, and use the "
                 "Prescription Analyzer for a prescription or tablet strip."

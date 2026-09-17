@@ -1,5 +1,6 @@
 """FastAPI application factory: `/health`, CORS, request-id middleware, routers (M0 exit criteria)."""
 
+import asyncio
 import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
@@ -21,6 +22,7 @@ from app.api import (
     specialists,
 )
 from app.config import get_settings
+from app.deps import warm_token_cache
 from app.errors import DomainError
 from app.models.common import ProblemDetails
 
@@ -28,7 +30,13 @@ from app.models.common import ProblemDetails
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # TODO(D1): initialize the Azure Monitor OpenTelemetry exporter here (Section 7.2).
-    yield
+    # Backgrounded, not awaited: acquiring the first token shells out to `az` locally and would
+    # otherwise hold the port closed for the best part of a minute on every restart.
+    warmup = asyncio.create_task(warm_token_cache())
+    try:
+        yield
+    finally:
+        warmup.cancel()
 
 
 def create_app() -> FastAPI:

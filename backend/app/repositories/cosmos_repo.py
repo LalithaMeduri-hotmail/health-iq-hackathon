@@ -278,8 +278,10 @@ async def find_account_by_identifier(identifier: str) -> dict | None:
         return _DEMO_ACCOUNTS.get(user_id) if user_id else None
 
     query = "SELECT * FROM c WHERE c.usernameKey = @key OR c.mobileKey = @key OR c.emailKey = @key"
+    # The async SDK (azure-cosmos >= 4.9) fans out across partitions on its own; passing the old
+    # `enable_cross_partition_query` flag is now a TypeError.
     documents = _accounts_container().query_items(
-        query=query, parameters=[{"name": "@key", "value": key}], enable_cross_partition_query=True
+        query=query, parameters=[{"name": "@key", "value": key}]
     )
     async for document in documents:
         return document

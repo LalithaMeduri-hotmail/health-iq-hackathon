@@ -1,13 +1,17 @@
 """`SpecialistAdvisorAgent` (implementation-plan.md Section 4.2). Owner: D3.
 
-Tools: `search_specialist_mapping`, `get_doctor_links`. Output: `SpecialistGuidance`.
+Tools: `search_reference_ranges`, `search_specialist_guidance`. Output: `SpecialistGuidance`.
 Guardrails: category only; no named-doctor endorsement; links flagged public/demo data.
 
-Determinism boundary (agents.instructions.md): the abnormal set, the group mapping, the
-confidence score, and the rationale are pure Python, so the same report always yields the same
-guidance (NFR2.3). No LLM turn is required for this contract.
+Which specialty a group maps to stays pure Python - a wrong specialty sends someone to the wrong
+clinic, and the mapping is curated for exactly that reason. The *rationale* is written by a
+tool-calling agent that retrieves reference ranges and specialist guidance from Search and cites
+them, so the explanation is grounded rather than templated. `build_rationale()` remains the
+fallback whenever the model or retrieval is unavailable.
 """
 
+from app.agents import llm
+from app.agents.tools import search_reference_ranges, search_specialist_guidance
 from app.models.profile import (
     SPECIALIST_DISCLAIMER,
     DoctorLink,
@@ -113,15 +117,41 @@ def build_doctor_links(categories: list[SpecialistCategory]) -> list[DoctorLink]
     return list(links.values())
 
 
+async def _write_rationale(
+    abnormal: list[LabParameter], categories: list[SpecialistCategory]
+) -> str | None:
+    """Let the agent retrieve its own grounding and explain the suggestion."""
+    if not abnormal or not categories:
+        return None
+
+    findings = ", ".join(
+        f"{parameter.display_name} {parameter.value} {parameter.unit} ({parameter.status})"
+        for parameter in abnormal
+    )
+    suggested = ", ".join(category.specialty_category for category in categories)
+    return await llm.with_tools(
+        instructions=llm.prompt("specialist_advisor"),
+        task=(
+            f"Abnormal results: {findings}.\n"
+            f"Specialty categories already decided: {suggested}.\n"
+            "Research each finding with your tools, then write the rationale."
+        ),
+        tools=[search_reference_ranges, search_specialist_guidance],
+        name="SpecialistAdvisorAgent",
+    )
+
+
 async def run(payload: dict) -> SpecialistGuidance:
     """`payload` is `{"parameters": list[LabParameter]}` taken from the caller's stored report."""
     parameters: list[LabParameter] = payload["parameters"]
     abnormal = [parameter for parameter in parameters if parameter.status in ABNORMAL_STATUSES]
     categories = build_categories(abnormal)
 
+    rationale = await _write_rationale(abnormal, categories) or build_rationale(abnormal)
+
     return SpecialistGuidance(
         categories=categories,
-        rationale=build_rationale(abnormal),
+        rationale=rationale,
         doctorLinks=build_doctor_links(categories),
         disclaimer=get_mapping(categories[0].parameter_group)["disclaimer"]
         if categories

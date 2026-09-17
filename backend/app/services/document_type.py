@@ -1,9 +1,9 @@
-"""Tells a prescription apart from a lab report, so each upload lands on the right feature.
+"""Keyword fallback for telling a prescription apart from a lab report.
 
-Both analyzers accept the same file types, so without this an uploaded lab report is happily
-parsed as a prescription (and vice versa) and the user sees medicines that are not on their
-document. Signal counting only - no LLM, no network - so the verdict is deterministic and
-testable (agents.instructions.md: classification stays in Python).
+`agents/document_agent.py` owns this decision now and asks the model, because keyword counting
+cannot cope with layouts it has never seen. This module stays as the offline path: signal
+counting only - no LLM, no network - so demo mode and the test suite still route correctly and
+the verdict remains deterministic and testable.
 """
 
 import re

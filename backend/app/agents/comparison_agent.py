@@ -72,7 +72,7 @@ async def _write_llm_narrative(summary: str) -> str | None:
     from app.deps import get_chat_client
 
     try:
-        agent = get_chat_client().create_agent(
+        agent = get_chat_client().as_agent(
             instructions=_PROMPT_PATH.read_text(encoding="utf-8"), name="ComparisonAgent"
         )
         response = await agent.run(
@@ -98,7 +98,8 @@ async def run(payload: dict) -> ComparisonResult:
 
     settings = get_settings()
     if not settings.demo_mode and settings.azure_openai_endpoint:
-        narrative = await _write_llm_narrative(narrative) or ""
+        # Keep the deterministic narrative when the rephrase fails; `or ""` would ship an empty one.
+        narrative = await _write_llm_narrative(narrative) or narrative
 
     return ComparisonResult(
         oldReportDate=old_report.report_date,

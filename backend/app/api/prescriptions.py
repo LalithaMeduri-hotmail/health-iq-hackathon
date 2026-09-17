@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 
-from app.agents import orchestrator, safety_agent
+from app.agents import document_agent, orchestrator, safety_agent
 from app.config import get_settings
 from app.deps import CurrentUser, get_current_user
 from app.errors import LowConfidenceOcrError, ValidationError, WrongDocumentTypeError
@@ -80,12 +80,12 @@ async def analyze(
         file_envelope = await ocr_extract(content, mode="read")
 
         if file_envelope.was_read:
-            kind = document_type.classify(
+            verdict = await document_agent.classify(
                 document_type.text_of(
                     [line.text for line in file_envelope.lines], file_envelope.tables
                 )
             )
-            if kind != "prescription":
+            if verdict.kind != "prescription":
                 raise WrongDocumentTypeError(
                     "This does not look like a prescription. Upload a prescription or tablet strip "
                     "here, and use Report Comparison or Health Profile for a lab report."
