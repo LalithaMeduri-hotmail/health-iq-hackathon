@@ -135,3 +135,15 @@ def test_logout_clears_the_session_cookie(client) -> None:
 
     assert response.status_code == 200
     assert client.get("/api/v1/auth/me").status_code == 401
+
+
+def test_logout_expires_the_cookie_on_the_path_it_was_set_on(client) -> None:
+    """A browser only overwrites a cookie whose name and path match the one it holds."""
+    _register(client)
+
+    header = client.post("/api/v1/auth/logout").headers["set-cookie"]
+
+    assert "hiq_session=" in header
+    assert "Path=/" in header
+    # Either form tells the browser to drop it immediately.
+    assert "Max-Age=0" in header or "1970" in header

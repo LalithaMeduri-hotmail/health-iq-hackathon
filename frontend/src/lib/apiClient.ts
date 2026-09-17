@@ -3,10 +3,29 @@
  * `fetch`/`axios` directly - always go through this module.
  */
 
-import { getAccessToken, isDemoMode } from './auth';
+import { getAccessToken, isDemoIdentityAllowed } from './auth';
 import type { ApiResponse, ProblemDetails } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+
+/**
+ * Called when the backend rejects a request the caller believed was authenticated - i.e. the
+ * session cookie expired or its signing key changed. `AuthContext` registers the handler that
+ * drops cached data and sends the user back to sign in.
+ */
+type UnauthorizedHandler = () => void;
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  unauthorizedHandler = handler;
+}
+
+// `/auth/me` answers 401 for an ordinary signed-out visitor and `/auth/login` for a wrong PIN.
+// Neither is an expired session, and treating them as one would bounce the user off the very page
+// they need.
+function isExpectedUnauthorized(path: string): boolean {
+  return path.startsWith('/api/v1/auth/');
+}
 
 export function absoluteApiUrl(path: string): string {
   return `${API_BASE_URL}${path}`;
@@ -25,13 +44,16 @@ async function request<TData>(path: string, init?: RequestInit): Promise<ApiResp
   const token = await getAccessToken();
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
-  } else if (isDemoMode) {
+  } else if (isDemoIdentityAllowed()) {
     headers.set('X-Demo-User-Id', 'demo-user');
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers, credentials: 'include' });
 
   if (!response.ok) {
+    if (response.status === 401 && !isExpectedUnauthorized(path)) {
+      unauthorizedHandler?.();
+    }
     const problem = (await response.json()) as ProblemDetails;
     throw new ApiError(problem);
   }

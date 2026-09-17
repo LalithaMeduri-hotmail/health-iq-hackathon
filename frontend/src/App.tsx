@@ -25,8 +25,9 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <AuthProvider>
-          <BrowserRouter>
+        {/* AuthProvider sits inside the router: ending a session navigates to /login. */}
+        <BrowserRouter>
+          <AuthProvider>
             {!consentVersion && <ConsentModal onAccept={setConsentVersion} />}
 
             <AppShell>
@@ -40,8 +41,8 @@ export function App() {
                 <Route path="/meal-plan" element={<MealPlanner />} />
               </Routes>
             </AppShell>
-          </BrowserRouter>
-        </AuthProvider>
+          </AuthProvider>
+        </BrowserRouter>
       </ThemeProvider>
     </QueryClientProvider>
   );

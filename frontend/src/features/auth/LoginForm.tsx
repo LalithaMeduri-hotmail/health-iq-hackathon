@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 
 import { Button, Card, Input, PinInput } from '@/components/ui';
@@ -33,8 +33,10 @@ function loginErrorMessage(error: unknown): string {
 
 export function LoginForm() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
+  const wasSessionExpired = searchParams.get('reason') === 'expired';
 
   const {
     register,
@@ -57,6 +59,11 @@ export function LoginForm() {
     <div className={styles.page}>
       <Card className={styles.card} title="Sign in" subtitle="Use your username, mobile number, or email with your PIN.">
         <form className={styles.form} onSubmit={onSubmit} noValidate>
+          {wasSessionExpired && !formError && (
+            <p className={styles.sessionNotice} role="status">
+              Your session has expired. Please sign in again to pick up where you left off.
+            </p>
+          )}
           <Input
             label="Username, mobile, or email"
             hideLabel

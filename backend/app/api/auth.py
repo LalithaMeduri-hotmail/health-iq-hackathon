@@ -130,7 +130,16 @@ async def login(
 
 @router.post("/logout")
 async def logout(request: Request, response: Response) -> ApiResponse[dict]:
-    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    # Mirrors the attributes `_set_session_cookie` wrote: a browser only overwrites a cookie whose
+    # name, path, domain *and* security attributes match, so a mismatch here leaves it alive.
+    settings = get_settings()
+    response.delete_cookie(
+        SESSION_COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=not settings.demo_mode,
+    )
     return _envelope(request, {"loggedOut": True})
 
 
