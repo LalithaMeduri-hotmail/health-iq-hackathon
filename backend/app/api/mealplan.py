@@ -17,6 +17,8 @@ from app.errors import SafetyViolationError
 from app.models.common import ApiResponse, SafetyBlock
 from app.models.mealplan import MealPlan, MealPlanRequest
 from app.repositories import cosmos_repo
+from app.services import patient_profiles
+from app.services.profile_authorization import authorize_profile
 
 router = APIRouter(prefix="/api/v1/meal-plan", tags=["meal-plan"])
 
@@ -27,10 +29,32 @@ async def generate(
 	body: MealPlanRequest,
 	current_user: CurrentUser = Depends(get_current_user),  # noqa: B008
 ) -> ApiResponse[MealPlan]:
-	"""Build a grounded meal plan for one caller-owned report."""
-	profile = await cosmos_repo.get_profile(current_user.user_id)
-	report = await cosmos_repo.get_report(current_user.user_id, body.report_id)
-	allergies = sorted(set(profile.preferences.allergies) | set(body.preferences.allergies))
+	"""Build a grounded meal plan from one profile's own report and dietary restrictions.
+
+	Only the selected profile contributes context. Allergies and intolerances recorded on that
+	profile are merged into the hard-exclusion list before the agent is called, so another
+	family member's restrictions can neither leak in nor be relied on.
+	"""
+	correlation_id = getattr(request.state, "request_id", "")
+	owner = await patient_profiles.ensure_owner_profile(
+		current_user.user_id, correlation_id=correlation_id
+	)
+	if body.profile_id and body.profile_id != owner.id:
+		patient = await authorize_profile(
+			current_user.user_id,
+			body.profile_id,
+			require_consent=True,
+			correlation_id=correlation_id,
+		)
+	else:
+		patient = owner
+
+	report = await cosmos_repo.get_report_for_profile(
+		current_user.user_id, patient.id, body.report_id, owner_profile_id=owner.id
+	)
+	allergies = sorted(
+		set(patient.allergies) | set(patient.food_intolerances) | set(body.preferences.allergies)
+	)
 
 	result = await orchestrator.run(
 		"meal-plan",
@@ -51,6 +75,7 @@ async def generate(
 		{
 			"type": "meal-plan-generate",
 			"reportId": report.id,
+			"profileId": patient.id,
 			"inputHash": input_hash,
 			"toolCalls": ["load_profile", "load_report", "search_nutrition_rules"],
 			"agentVersions": {"mealPlan": "1.0.0", "safety": "safety-1.0.0"},

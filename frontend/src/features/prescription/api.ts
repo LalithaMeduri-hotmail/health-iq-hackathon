@@ -18,6 +18,7 @@ import type {
 export interface LowConfidenceConfirmation {
   runId: string;
   items: MedicineEntity[];
+  patientName: string | null;
 }
 
 /** Extracts `{ runId, items[] }` from a `422 low-confidence-ocr` problem response. */
@@ -30,7 +31,8 @@ export function parseLowConfidenceError(error: ApiError): LowConfidenceConfirmat
   if (!runId || !itemsJson) {
     return null;
   }
-  return { runId, items: JSON.parse(itemsJson) as MedicineEntity[] };
+  const patientName = error.problem.errors?.find((e) => e.field === 'patientName')?.issue;
+  return { runId, items: JSON.parse(itemsJson) as MedicineEntity[], patientName: patientName || null };
 }
 
 export async function analyzePrescription(input: {
@@ -54,6 +56,13 @@ export async function confirmPrescription(
   corrections: MedicineCorrectionInput[],
 ): Promise<ApiResponse<PrescriptionConfirmResponse>> {
   return apiClient.post<PrescriptionConfirmResponse>('/api/v1/prescriptions/confirm', { runId, corrections });
+}
+
+export function assignPrescription(
+  runId: string,
+  profileId: string,
+): Promise<ApiResponse<{ runId: string; profileId: string }>> {
+  return apiClient.post('/api/v1/prescriptions/assign', { runId, profileId });
 }
 
 export async function fetchAlternatives(

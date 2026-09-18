@@ -5,15 +5,11 @@ Output: `ReportSummary`. Guardrails: use "possible concern"; never name a diseas
 """
 
 from app.errors import NotFoundError
-from app.models.report import (
-    ABNORMAL_STATUSES,
-    HealthScoreBreakdown,
-    LabParameter,
-    ReportSummary,
-    ScorePenalty,
-    SystemCard,
-)
+from app.models.report import LabParameter, ReportSummary, SystemCard
+from app.services.health_score import health_score, is_abnormal, score_breakdown
 from app.services.reference_ranges import get_reference_range, get_source
+
+__all__ = ["build_narrative", "build_system_cards", "health_score", "run", "score_breakdown"]
 
 # Organ/system grouping for the Health Profile cards (LLD Section 2).
 SYSTEM_GROUPS: dict[str, tuple[str, ...]] = {
@@ -26,50 +22,8 @@ SYSTEM_GROUPS: dict[str, tuple[str, ...]] = {
     "Vitamins": ("vitamin_d", "vitamin_b12"),
 }
 
-_BASE_SCORE = 100.0
-_ABNORMAL_PENALTY = 8.0
-_CRITICAL_PENALTY = 15.0
 _GROUNDED_NOTE_LIMIT = 3
 _OTHER_SYSTEM = "Other results"
-
-_SCORE_METHOD = (
-    f"Every report starts at {_BASE_SCORE:.0f}. Each value outside its typical range subtracts "
-    f"{_ABNORMAL_PENALTY:.0f} points, and each critically flagged value subtracts "
-    f"{_CRITICAL_PENALTY:.0f}. Values with no reference range on file are not counted. "
-    "This is an educational indicator, not a diagnosis."
-)
-
-
-def _is_abnormal(parameter: LabParameter) -> bool:
-    return parameter.status in ABNORMAL_STATUSES
-
-
-def score_breakdown(parameters: list[LabParameter]) -> HealthScoreBreakdown:
-    """Deterministic 0-100 score plus the per-parameter deductions that produced it (NFR2.5)."""
-    penalties = [
-        ScorePenalty(
-            canonicalKey=parameter.canonical_key,
-            displayName=parameter.display_name,
-            status=parameter.status,
-            penalty=_CRITICAL_PENALTY if parameter.status == "critical_flag" else _ABNORMAL_PENALTY,
-        )
-        for parameter in parameters
-        if _is_abnormal(parameter)
-    ]
-    total_penalty = sum(penalty.penalty for penalty in penalties)
-
-    return HealthScoreBreakdown(
-        baseScore=_BASE_SCORE,
-        penalties=penalties,
-        totalPenalty=total_penalty,
-        healthScore=round(max(0.0, _BASE_SCORE - total_penalty), 1),
-        method=_SCORE_METHOD,
-    )
-
-
-def health_score(parameters: list[LabParameter]) -> float:
-    """Deterministic 0-100 score: every out-of-range value costs a fixed, explainable amount."""
-    return score_breakdown(parameters).health_score
 
 
 def build_system_cards(parameters: list[LabParameter]) -> list[SystemCard]:
@@ -82,7 +36,7 @@ def build_system_cards(parameters: list[LabParameter]) -> list[SystemCard]:
     for system, measured in groups.items():
         if not measured:
             continue
-        abnormal = [parameter for parameter in measured if _is_abnormal(parameter)]
+        abnormal = [parameter for parameter in measured if is_abnormal(parameter)]
         risk_level = "typical" if not abnormal else ("watch" if len(abnormal) == 1 else "discuss")
         noun = "value" if len(measured) == 1 else "values"
         summary = (
@@ -139,7 +93,7 @@ async def run(payload: dict) -> ReportSummary:
     """
     parameters: list[LabParameter] = payload["parameters"]
     parameters = [_with_meaning(parameter) for parameter in parameters]
-    abnormal = [parameter for parameter in parameters if _is_abnormal(parameter)]
+    abnormal = [parameter for parameter in parameters if is_abnormal(parameter)]
     score = health_score(parameters)
 
     return ReportSummary(

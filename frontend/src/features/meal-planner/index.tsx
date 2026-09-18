@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 
 import { Button, EmptyState, ErrorState, LoadingState, PageHeader } from '@/components/ui';
+import { useActiveProfileOptional } from '@/features/patient-profiles';
 import { ApiError } from '@/lib/apiClient';
 
 import { fetchMealPlanReports, generateMealPlan } from './api';
@@ -125,7 +126,13 @@ function MealPlanResult({ plan }: { plan: MealPlan }) {
 }
 
 export function MealPlannerFeature() {
-  const reportsQuery = useQuery({ queryKey: ['reports'], queryFn: fetchMealPlanReports });
+  const activeProfile = useActiveProfileOptional();
+  const activeProfileId = activeProfile?.activeProfileId ?? null;
+  const reportsQuery = useQuery({
+    queryKey: ['reports', activeProfileId],
+    queryFn: () => fetchMealPlanReports(activeProfileId),
+    enabled: !activeProfile || !activeProfile.isLoading,
+  });
   const reports = useMemo(() => reportsQuery.data?.data.reports ?? [], [reportsQuery.data]);
   const [plan, setPlan] = useState<MealPlan | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -167,6 +174,7 @@ export function MealPlannerFeature() {
     generateMutation.mutate({
       reportId: selectedReportId,
       preferences: { cuisine, budget, days: Number(days) },
+      ...(activeProfileId ? { profileId: activeProfileId } : {}),
     });
   });
 

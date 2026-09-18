@@ -1,7 +1,34 @@
+.authLayout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4, 1rem);
+  padding: var(--space-8, 2rem) var(--space-4, 1rem);
+  background: var(--color-surface, #fff);
+}
+
+.authBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 0.5rem);
+  color: var(--color-text, #101828);
+  font-size: 1.35rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.authBrand img {
+  width: 3rem;
+  height: 3rem;
+  object-fit: contain;
+}
+
 .page {
   display: flex;
   justify-content: center;
-  padding: var(--space-8, 2rem) var(--space-4, 1rem);
+  width: 100%;
 }
 
 .card {
@@ -40,6 +67,16 @@
   color: var(--color-danger, #c0362c);
   font-size: 0.9rem;
   margin: 0;
+}
+
+.sessionNotice {
+  margin: 0;
+  padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+  font-size: 0.9rem;
+  color: var(--color-text, #1d2939);
+  background: var(--color-warning-soft, rgba(234, 170, 8, 0.12));
+  border: 1px solid var(--color-warning, rgba(234, 170, 8, 0.45));
+  border-radius: 0.5rem;
 }
 
 .hintText {

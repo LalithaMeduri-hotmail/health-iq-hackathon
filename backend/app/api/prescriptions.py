@@ -15,6 +15,7 @@ from app.agents import orchestrator, safety_agent
 from app.config import get_settings
 from app.deps import CurrentUser, get_current_user
 from app.errors import LowConfidenceOcrError, ValidationError, WrongDocumentTypeError
+from app.models.audit import AuditAction
 from app.models.common import DISCLAIMER_TEXT, ApiResponse, SafetyBlock
 from app.models.medicine import (
     ManualMedicineInput,
@@ -23,11 +24,13 @@ from app.models.medicine import (
     PrescriptionConfirmRequest,
     PrescriptionConfirmResponse,
 )
+from app.models.patient_profile import PrescriptionAssignment
 from app.repositories import cosmos_repo
-from app.services import blob, deidentify, document_type
+from app.services import audit, blob, deidentify, document_type, patient_profiles
 from app.services.normalize_medicine import apply_correction
 from app.services.ocr import OcrEnvelope, OcrLine
 from app.services.ocr import extract as ocr_extract
+from app.services.profile_authorization import authorize_profile
 
 router = APIRouter(prefix="/api/v1/prescriptions", tags=["prescriptions"])
 
@@ -112,6 +115,11 @@ async def analyze(
     result = await orchestrator.run("prescription", {"ocr_envelope": combined_envelope})
     analysis = result.data
 
+    # Manually typed medicines are the account owner describing their own prescription, so they
+    # bind to the owner profile immediately. An uploaded document stays unassigned until the
+    # caller confirms which patient it belongs to (`POST /assign`).
+    owner_profile = await patient_profiles.ensure_owner_profile(current_user.user_id)
+
     run_id = f"run-{uuid.uuid4().hex[:12]}"
     await cosmos_repo.record_run(
         current_user.user_id,
@@ -123,6 +131,7 @@ async def analyze(
             "toolCalls": ["ocr_extract", "normalize_medicine"],
             "agentVersions": {"prescription": "1.0.0", "safety": "safety-1.0.0"},
             "safety": {"pass": result.safety_pass, "violations": result.safety_notes},
+            "profileId": owner_profile.id if file is None else None,
             "createdAt": datetime.now(UTC).isoformat(),
         },
     )
@@ -136,6 +145,7 @@ async def analyze(
         errors = [
             {"field": "runId", "issue": run_id},
             {"field": "items", "issue": json.dumps([item.model_dump(by_alias=True) for item in analysis.items])},
+            {"field": "patientName", "issue": detected_patient_name or ""},
         ] + [
             {
                 "field": f"items[{idx}].brandName",
@@ -170,6 +180,42 @@ async def analyze(
     return _envelope(request, safety, data)
 
 
+@router.post("/assign")
+async def assign(
+    request: Request,
+    body: PrescriptionAssignment,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> ApiResponse[PrescriptionAssignment]:
+    """Attach an analyzed prescription run to one patient profile owned by this account.
+
+    The profile is authorized before the run is read, and a run already bound to a different
+    profile is never re-pointed - that would move one person's medicine list onto another.
+    """
+    correlation_id = getattr(request.state, "request_id", "")
+    profile = await authorize_profile(
+        current_user.user_id,
+        body.profile_id,
+        require_consent=True,
+        correlation_id=correlation_id,
+    )
+    run_doc = await cosmos_repo.get_run(current_user.user_id, body.run_id)
+    assigned_profile_id = run_doc.get("profileId")
+    if assigned_profile_id and assigned_profile_id != profile.id:
+        raise ValidationError("This prescription is already assigned to another patient")
+    run_doc["profileId"] = profile.id
+    await cosmos_repo.record_run(current_user.user_id, body.run_id, run_doc)
+    await audit.record(
+        account_id=current_user.user_id,
+        profile_id=profile.id,
+        action=AuditAction.DOCUMENT_CONFIRMED,
+        resource_type="prescriptionRun",
+        resource_id=body.run_id,
+        correlation_id=correlation_id,
+    )
+    safety = SafetyBlock(pass_=True, notes=[], reviewer_version="safety-1.0.0")
+    return _envelope(request, safety, body)
+
+
 @router.post("/confirm")
 async def confirm(
     request: Request,
@@ -178,6 +224,8 @@ async def confirm(
 ) -> ApiResponse[PrescriptionConfirmResponse]:
     """`{ runId, corrections[] }` -> updated `items[]` with recomputed `matchScore`."""
     run_doc = await cosmos_repo.get_run(current_user.user_id, body.run_id)
+    if not run_doc.get("profileId"):
+        raise ValidationError("Confirm who this prescription belongs to before continuing")
     items = [MedicineEntity.model_validate(item) for item in run_doc["items"]]
     corrections_by_line = {c.line_id: c for c in body.corrections}
 

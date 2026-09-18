@@ -12,22 +12,34 @@ import type {
   ReportListResponse,
 } from './types';
 
-export async function fetchReports(): Promise<ApiResponse<ReportListResponse>> {
-  return apiClient.get<ReportListResponse>('/api/v1/reports');
+export async function fetchReports(profileId?: string | null): Promise<ApiResponse<ReportListResponse>> {
+  const query = profileId ? `?profileId=${encodeURIComponent(profileId)}` : '';
+  return apiClient.get<ReportListResponse>(`/api/v1/reports${query}`);
 }
 
-export async function analyzeReport(file: File): Promise<ApiResponse<ReportAnalyzeResponse>> {
+export async function analyzeReport(
+  file: File,
+  profileId?: string | null,
+): Promise<ApiResponse<ReportAnalyzeResponse>> {
   const form = new FormData();
   form.set('consent', 'true');
   form.set('file', file);
+  if (profileId) {
+    form.set('profileId', profileId);
+  }
   return apiClient.post<ReportAnalyzeResponse>('/api/v1/reports/analyze', form);
 }
 
 export async function compareReports(
   oldReportId: string,
   currentReportId: string,
+  profileId?: string | null,
 ): Promise<ApiResponse<ComparisonResult>> {
-  return apiClient.post<ComparisonResult>('/api/v1/reports/compare', { oldReportId, currentReportId });
+  return apiClient.post<ComparisonResult>('/api/v1/reports/compare', {
+    oldReportId,
+    currentReportId,
+    ...(profileId ? { profileId } : {}),
+  });
 }
 
 export { ApiError };

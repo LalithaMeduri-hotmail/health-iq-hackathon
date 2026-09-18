@@ -57,7 +57,7 @@ def _set_session_cookie(response: Response, user_id: str) -> int:
         max_age=expires_in,
         httponly=True,
         samesite="lax",
-        secure=not settings.demo_mode,
+        secure=settings.session_cookie_secure,
         path="/",
     )
     return expires_in
@@ -130,7 +130,16 @@ async def login(
 
 @router.post("/logout")
 async def logout(request: Request, response: Response) -> ApiResponse[dict]:
-    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    # Mirrors the attributes `_set_session_cookie` wrote: a browser only overwrites a cookie whose
+    # name, path, domain *and* security attributes match, so a mismatch here leaves it alive.
+    settings = get_settings()
+    response.delete_cookie(
+        SESSION_COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=settings.session_cookie_secure,
+    )
     return _envelope(request, {"loggedOut": True})
 
 

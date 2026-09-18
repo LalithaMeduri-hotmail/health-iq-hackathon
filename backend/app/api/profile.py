@@ -22,6 +22,8 @@ from app.models.profile import (
     ProfileResponse,
 )
 from app.repositories import cosmos_repo
+from app.services import patient_profiles
+from app.services.profile_authorization import authorize_profile
 
 router = APIRouter(prefix="/api/v1/profile", tags=["profile"])
 
@@ -88,12 +90,32 @@ def _validated(body: PreferencesUpdate) -> Preferences:
 @router.get("")
 async def get_profile(
     request: Request,
+    profileId: str | None = None,  # noqa: N803 - query parameter name is camelCase
     current_user: CurrentUser = Depends(get_current_user),
 ) -> ApiResponse[ProfileResponse]:
-    """`{ profile, reports[], latestSummary }` - consent, preferences, report history (FR2.5)."""
+    """`{ profile, reports[], latestSummary }` - consent, preferences, report history (FR2.5).
+
+    The history is scoped to one patient profile: an account-wide list would put one family
+    member's reports on another's page, and the report detail route only serves the owning profile.
+    """
+    correlation_id = getattr(request.state, "request_id", "")
+    owner = await patient_profiles.ensure_owner_profile(
+        current_user.user_id, correlation_id=correlation_id
+    )
+    target = owner
+    if profileId and profileId != owner.id:
+        target = await authorize_profile(
+            current_user.user_id,
+            profileId,
+            require_active=False,
+            correlation_id=correlation_id,
+        )
+
     profile = await cosmos_repo.get_profile(current_user.user_id)
     reports = sorted(
-        await cosmos_repo.list_reports(current_user.user_id),
+        await cosmos_repo.list_reports_for_profile(
+            current_user.user_id, target.id, owner_profile_id=owner.id
+        ),
         key=lambda report: report.report_date,
         reverse=True,
     )

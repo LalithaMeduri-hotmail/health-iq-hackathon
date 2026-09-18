@@ -1,0 +1,251 @@
+/**
+ * Patient profiles - layout only; visual language (color/spacing/type) comes from the shared
+ * design system (`components/ui`, `styles/theme.css`).
+ */
+
+/* ------------------------------------------------------------------ header profile selector */
+
+.selector {
+  position: relative;
+}
+
+.selectorButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  max-width: 260px;
+}
+
+.selectorButton:hover {
+  border-color: var(--color-brand-500);
+}
+
+.selectorButton:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
+.selectorAvatar {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--gradient-brand);
+  color: var(--color-text-on-brand);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  flex: none;
+}
+
+.selectorLabel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: var(--line-height-tight);
+  overflow: hidden;
+}
+
+.selectorName {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 10rem;
+}
+
+.selectorRelation {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.selectorCaret {
+  color: var(--color-text-secondary);
+  flex: none;
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-2));
+  z-index: 40;
+  min-width: 260px;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  background: var(--color-bg-surface);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 12%);
+}
+
+.menuHint {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.menuItem {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm, 8px);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.menuItem:hover,
+.menuItem:focus-visible {
+  background: var(--color-bg-surface-muted);
+}
+
+.menuItemActive {
+  background: var(--color-brand-50, var(--color-bg-surface-muted));
+  font-weight: 600;
+}
+
+.menuDivider {
+  height: 1px;
+  margin: var(--space-2) 0;
+  background: var(--color-border);
+}
+
+/* ------------------------------------------------------------------------- active profile banner */
+
+/* ------------------------------------------------------------------------------ management page */
+
+.list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-5);
+  margin-top: var(--space-5);
+}
+
+.profileCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.profileCardTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profileCardName {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+.profileCardMeta {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.badgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.cardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.archived {
+  opacity: 0.72;
+}
+
+/* ------------------------------------------------------------------------------------- forms */
+
+.form {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.field > span {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.field input,
+.field select,
+.field textarea {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 1px;
+}
+
+.hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.consentBox {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--color-bg-surface-muted);
+}
+
+.consentBox input {
+  margin-top: 4px;
+  flex: none;
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.formError {
+  padding: var(--space-3);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+}
