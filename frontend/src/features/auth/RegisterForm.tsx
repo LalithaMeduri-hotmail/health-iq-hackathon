@@ -12,6 +12,14 @@ import { ApiError } from '@/lib/apiClient';
 import { useAuth } from './AuthContext';
 import styles from './auth.module.css';
 
+// Mirrors `_TRIVIAL_PINS` in backend/app/models/account.py. Without this the backend rejects the
+// PIN with a raw 422 that names no field, so the user is told "something went wrong" and has no
+// way to guess that their PIN is the problem.
+const TRIVIAL_PINS = new Set([
+  '0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999',
+  '1234', '4321', '0123', '1000', '2000',
+]);
+
 const registerSchema = z
   .object({
     username: z
@@ -20,7 +28,10 @@ const registerSchema = z
       .regex(/^[a-zA-Z0-9_.]{3,32}$/, 'Use 3-32 letters, digits, "." or "_".'),
     mobile: z.string().trim().regex(/^\+?[0-9]{7,15}$/, 'Enter a valid mobile number.').or(z.literal('')),
     email: z.string().trim().email('Enter a valid email address.').or(z.literal('')),
-    pin: z.string().regex(/^\d{4}$/, 'Enter a 4-digit PIN.'),
+    pin: z
+      .string()
+      .regex(/^\d{4}$/, 'Enter a 4-digit PIN.')
+      .refine((pin) => !TRIVIAL_PINS.has(pin), 'Choose a less predictable PIN.'),
     confirmPin: z.string(),
   })
   .refine((values) => Boolean(values.mobile) || Boolean(values.email), {
@@ -35,14 +46,31 @@ const registerSchema = z
 type RegisterForm = z.infer<typeof registerSchema>;
 
 function registerErrorMessage(error: unknown): string {
-  if (error instanceof ApiError) {
-    if (error.problem.status === 409) {
-      return 'That username, mobile, or email is already registered.';
-    }
-    if (error.problem.status === 400 || error.problem.status === 422) {
-      return error.problem.detail || 'Please check the details you entered.';
-    }
+  if (!(error instanceof ApiError)) {
+    return 'Something went wrong creating your account. Please try again.';
   }
+
+  const { status, detail } = error.problem;
+
+  if (status === 409) {
+    return 'That username, mobile, or email is already registered.';
+  }
+
+  // FastAPI's own request-validation failure is not an RFC 7807 problem: it has no `status` and
+  // `detail` is an array of field errors, so it has to be flattened before it can be displayed.
+  if (Array.isArray(detail)) {
+    const messages = (detail as Array<{ msg?: string }>)
+      .map((item) => item.msg?.replace(/^Value error,\s*/, ''))
+      .filter(Boolean);
+    return messages.length > 0
+      ? messages.join(' ')
+      : 'Please check the details you entered.';
+  }
+
+  if (typeof detail === 'string' && (status === 400 || status === 422)) {
+    return detail;
+  }
+
   return 'Something went wrong creating your account. Please try again.';
 }
 

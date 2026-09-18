@@ -117,6 +117,9 @@ class StoredReport(BaseModel):
 
     id: str
     user_id: str = Field(alias="userId")
+    # Empty on reports stored before patient profiles existed; those belong to the account
+    # owner's profile and are resolved to it on read.
+    profile_id: str = Field(alias="profileId", default="")
     report_date: str = Field(alias="reportDate")
     lab_name: str = Field(alias="labName", default="")
     parameters: list[LabParameter] = Field(default_factory=list)
@@ -143,12 +146,16 @@ class ReportListResponse(BaseModel):
 
 
 class ComparisonRequest(BaseModel):
-    """`POST /api/v1/reports/compare` body (LLD Section 3.3.1)."""
+    """`POST /api/v1/reports/compare` body (LLD Section 3.3.1).
+
+    `profileId` is optional; omitting it means the account owner's own profile.
+    """
 
     model_config = ConfigDict(populate_by_name=True)
 
     old_report_id: str = Field(alias="oldReportId")
     current_report_id: str = Field(alias="currentReportId")
+    profile_id: str | None = Field(alias="profileId", default=None)
 
 
 class PdfGenerateRequest(BaseModel):

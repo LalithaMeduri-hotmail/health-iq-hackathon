@@ -13,6 +13,7 @@ import { ErrorState, PageHeader } from '@/components/ui';
 
 import { analyzePrescription, confirmPrescription, parseLowConfidenceError } from './api';
 import { ConfirmStep } from './ConfirmStep';
+import { PatientIdentityDialog } from './PatientIdentityDialog';
 import styles from './prescription.module.css';
 import { ResultsStep } from './ResultsStep';
 import type { MedicineCorrectionInput, MedicineEntity } from './types';
@@ -47,6 +48,7 @@ export function PrescriptionAnalyzerFeature() {
   // Read off the uploaded prescription; it pre-fills the name on the doctor-signed document.
   const [patientName, setPatientName] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isPatientDialogOpen, setIsPatientDialogOpen] = useState(false);
 
   const analyzeMutation = useMutation({
     mutationFn: analyzePrescription,
@@ -58,19 +60,20 @@ export function PrescriptionAnalyzerFeature() {
         items: response.data.items,
         ocrConfidence: response.data.ocrConfidence,
       });
-      setStep('confirm');
+      setIsPatientDialogOpen(true);
     },
     onError: (error: unknown) => {
       if (error instanceof ApiError) {
         const lowConfidence = parseLowConfidenceError(error);
         if (lowConfidence) {
+          setPatientName(lowConfidence.patientName);
           setConfirmation({
             runId: lowConfidence.runId,
             items: lowConfidence.items,
             ocrConfidence: averageConfidence(lowConfidence.items),
           });
           setErrorMessage(null);
-          setStep('confirm');
+          setIsPatientDialogOpen(true);
           return;
         }
         setErrorMessage(error.problem.detail);
@@ -100,6 +103,7 @@ export function PrescriptionAnalyzerFeature() {
     setResults(null);
     setPatientName(null);
     setErrorMessage(null);
+    setIsPatientDialogOpen(false);
     setStep('upload');
   }
 
@@ -134,6 +138,18 @@ export function PrescriptionAnalyzerFeature() {
 
       {step === 'upload' && (
         <UploadStep onSubmit={(input) => analyzeMutation.mutate({ consent: true, ...input })} isPending={analyzeMutation.isPending} />
+      )}
+
+      {isPatientDialogOpen && confirmation && (
+        <PatientIdentityDialog
+          runId={confirmation.runId}
+          extractedName={patientName}
+          onAssigned={() => {
+            setIsPatientDialogOpen(false);
+            setStep('confirm');
+          }}
+          onCancel={startOver}
+        />
       )}
 
       {step === 'confirm' && confirmation && (

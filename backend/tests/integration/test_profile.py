@@ -60,6 +60,34 @@ def test_get_profile_returns_report_history_newest_first_with_scores(client) -> 
     assert data["latestSummary"]["reportId"] == reports[0]["reportId"]
 
 
+def test_profile_history_is_scoped_to_one_patient_and_its_detail_resolves(client) -> None:
+    """The page's history and the report detail route must agree on the owning profile."""
+    relative = client.post(
+        "/api/v1/profiles",
+        json={
+            "displayName": "Asha Rao",
+            "relationshipToAccountOwner": "child",
+            "consentAccepted": True,
+        },
+    ).json()["data"]
+
+    analyzed = client.post(
+        "/api/v1/reports/analyze",
+        data={"consent": "true", "profileId": relative["id"]},
+        files={"file": ("report.pdf", _UPLOAD, "application/pdf")},
+    ).json()["data"]
+
+    owner_history = client.get("/api/v1/profile").json()["data"]["reports"]
+    assert analyzed["reportId"] not in {report["reportId"] for report in owner_history}
+
+    scoped = client.get(f"/api/v1/profile?profileId={relative['id']}").json()["data"]
+    assert [report["reportId"] for report in scoped["reports"]] == [analyzed["reportId"]]
+
+    latest = scoped["latestSummary"]["reportId"]
+    detail = client.get(f"/api/v1/reports/{latest}?profileId={relative['id']}")
+    assert detail.status_code == 200
+
+
 def test_update_preferences_persists_and_normalizes_tokens(client) -> None:
     response = _put(
         client,

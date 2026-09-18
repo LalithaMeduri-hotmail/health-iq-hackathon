@@ -3,7 +3,11 @@
 Runs against the recorded demo report history (`DEMO_MODE=true`), so no live Azure is needed.
 """
 
+from dataclasses import replace
+
 import pytest
+
+from app.services.ocr import OcrLine, _demo_layout_envelope
 
 # Demo mode replays the recorded lab fixtures in rotation, so two uploads yield two report dates.
 _UPLOAD = b"%PDF-1.4 lab report " + b"0" * 40
@@ -172,6 +176,42 @@ def test_analyze_without_consent_is_rejected(client) -> None:
 
     assert response.status_code == 400
     assert response.json()["type"] == "https://healthiq/errors/validation-error"
+
+
+def test_analyze_flags_an_upload_whose_patient_could_not_be_read(client) -> None:
+    """A replayed envelope carries no name, so the report must not look identity-checked."""
+    response = _analyze(client)
+
+    assert response.status_code == 200
+    assert "patient-identity-unverified" in response.json()["safety"]["notes"]
+
+
+def test_analyze_requires_a_separate_profile_for_a_different_patient(
+    client, monkeypatch
+) -> None:
+    before = client.get("/api/v1/reports").json()["data"]["reports"]
+    fixture = _demo_layout_envelope()
+    envelope = replace(
+        fixture,
+        source="pdf-text",
+        lines=[OcrLine(text="Patient: Asha Rao", confidence=0.99, bbox=[]), *fixture.lines],
+    )
+
+    async def read_different_patient(_content: bytes, *, mode: str):
+        assert mode == "layout"
+        return envelope
+
+    monkeypatch.setattr("app.api.reports.ocr_extract", read_different_patient)
+
+    response = _analyze(client, "asha-report.pdf")
+
+    assert response.status_code == 422
+    assert response.json()["type"] == "https://healthiq/errors/profile-mismatch"
+    assert {error["field"]: error["issue"] for error in response.json()["errors"]}[
+        "patientName"
+    ] == "Asha Rao"
+    after = client.get("/api/v1/reports").json()["data"]["reports"]
+    assert len(after) == len(before)
 
 
 def test_analyze_rejects_a_disallowed_file_type(client) -> None:

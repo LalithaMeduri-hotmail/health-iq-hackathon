@@ -91,6 +91,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = {
               name: 'AZURE_KEY_VAULT_URI'
               value: keyVaultUri
             }
+            {
+              name: 'SESSION_COOKIE_SECURE'
+              value: 'true'
+            }
           ]
         }
       ]

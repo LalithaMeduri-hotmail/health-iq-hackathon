@@ -42,11 +42,15 @@ class MealPlanPreferences(BaseModel):
 
 
 class MealPlanRequest(BaseModel):
-    """`POST /api/v1/meal-plan/generate` request body."""
+    """`POST /api/v1/meal-plan/generate` request body.
+
+    `profileId` is optional; omitting it means the account owner's own profile.
+    """
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     report_id: str = Field(alias="reportId", min_length=1, max_length=128)
+    profile_id: str | None = Field(alias="profileId", default=None)
     preferences: MealPlanPreferences = Field(default_factory=MealPlanPreferences)
 
 

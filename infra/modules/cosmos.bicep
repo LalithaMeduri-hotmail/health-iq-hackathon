@@ -31,6 +31,18 @@ var containerDefs = [
     name: 'accounts'
     partitionKey: '/id'
   }
+  {
+    name: 'documents'
+    partitionKey: '/accountId'
+  }
+  {
+    name: 'audit'
+    partitionKey: '/accountId'
+  }
+  {
+    name: 'consents'
+    partitionKey: '/accountId'
+  }
 ]
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {

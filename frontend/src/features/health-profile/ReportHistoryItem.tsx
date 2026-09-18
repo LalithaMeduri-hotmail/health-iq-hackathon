@@ -6,6 +6,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { Badge, ErrorState, LoadingState } from '@/components/ui';
+import { useActiveProfileOptional } from '@/features/patient-profiles';
 
 import { ParameterTable } from './ParameterTable';
 import { fetchReportDetail } from './api';
@@ -22,10 +23,11 @@ interface ReportHistoryItemProps {
 
 export function ReportHistoryItem({ report, isLatest, isOpen, onToggle }: ReportHistoryItemProps) {
   const panelId = `report-panel-${report.reportId}`;
+  const activeProfileId = useActiveProfileOptional()?.activeProfileId ?? null;
 
   const detailQuery = useQuery({
-    queryKey: ['report-detail', report.reportId],
-    queryFn: () => fetchReportDetail(report.reportId),
+    queryKey: ['report-detail', activeProfileId, report.reportId],
+    queryFn: () => fetchReportDetail(report.reportId, activeProfileId),
     enabled: isOpen,
   });
 

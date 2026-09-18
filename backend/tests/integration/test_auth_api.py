@@ -42,6 +42,12 @@ def test_register_creates_an_account_and_sets_a_session_cookie(client) -> None:
     assert "hiq_session" in response.cookies
 
 
+def test_local_session_cookie_is_accepted_over_http(client) -> None:
+    response = _register(client)
+
+    assert "Secure" not in response.headers["set-cookie"]
+
+
 def test_register_requires_mobile_or_email(client) -> None:
     response = _register(client, mobile=None, email=None)
 

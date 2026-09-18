@@ -37,6 +37,7 @@ export function LoginForm() {
   const { login } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
   const wasSessionExpired = searchParams.get('reason') === 'expired';
+  const isLoginRequired = searchParams.get('reason') === 'required';
 
   const {
     register,
@@ -62,6 +63,11 @@ export function LoginForm() {
           {wasSessionExpired && !formError && (
             <p className={styles.sessionNotice} role="status">
               Your session has expired. Please sign in again to pick up where you left off.
+            </p>
+          )}
+          {isLoginRequired && !formError && (
+            <p className={styles.sessionNotice} role="status">
+              Please sign in to use this feature.
             </p>
           )}
           <Input

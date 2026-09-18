@@ -10,6 +10,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { ErrorState, LoadingState, PageHeader } from '@/components/ui';
+import { useActiveProfileOptional } from '@/features/patient-profiles';
 
 import {
   ApiError,
@@ -25,6 +26,7 @@ import { PreferencesCard } from './PreferencesCard';
 import { ProfileSummary } from './ProfileSummary';
 import { ProfileTabs } from './ProfileTabs';
 import { ReportHistoryPanel } from './ReportHistoryPanel';
+import { ReportPatientDialog } from './ReportPatientDialog';
 import { ReportUploadCard } from './ReportUploadCard';
 import styles from './health-profile.module.css';
 import type { ProfileTab } from './ProfileTabs';
@@ -35,6 +37,11 @@ type TabId = (typeof TAB_IDS)[number];
 
 export function HealthProfileFeature() {
   const queryClient = useQueryClient();
+  const activeProfile = useActiveProfileOptional();
+  const activeProfileId = activeProfile?.activeProfileId ?? null;
+  // Reading before the profile list resolves would fetch the account scope and then refetch,
+  // briefly showing another patient's history.
+  const isProfileResolved = !activeProfile || !activeProfile.isLoading;
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
   const activeTab: TabId = (TAB_IDS as readonly string[]).includes(requestedTab ?? '')
@@ -45,8 +52,13 @@ export function HealthProfileFeature() {
   const [openReportId, setOpenReportId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
+  const [mismatchedReport, setMismatchedReport] = useState<{ file: File; patientName: string } | null>(null);
 
-  const profileQuery = useQuery({ queryKey: ['profile'], queryFn: fetchProfile });
+  const profileQuery = useQuery({
+    queryKey: ['profile', activeProfileId],
+    queryFn: () => fetchProfile(activeProfileId),
+    enabled: isProfileResolved,
+  });
   const profile = profileQuery.data?.data.profile;
   const reports = profileQuery.data?.data.reports ?? [];
   const latestSummary = profileQuery.data?.data.latestSummary ?? null;
@@ -54,8 +66,8 @@ export function HealthProfileFeature() {
 
   // Shares a cache key with the timeline rows, so opening the latest report costs no extra request.
   const latestDetailQuery = useQuery({
-    queryKey: ['report-detail', latestReportId],
-    queryFn: () => fetchReportDetail(latestReportId!),
+    queryKey: ['report-detail', activeProfileId, latestReportId],
+    queryFn: () => fetchReportDetail(latestReportId!, activeProfileId),
     enabled: Boolean(latestReportId),
   });
 
@@ -86,19 +98,33 @@ export function HealthProfileFeature() {
   });
 
   const analyzeMutation = useMutation({
-    mutationFn: (file: File) => analyzeReport(file),
+    mutationFn: ({ file, profileId }: { file: File; profileId?: string }) => analyzeReport(file, profileId),
     onSuccess: (response) => {
       setErrorMessage(null);
       setIsUploadOpen(false);
-      setNoticeMessage(
-        response.safety.notes.includes('report-date-not-detected')
-          ? "No report date was printed on that file, so today's date was used instead."
-          : 'Report analyzed. Your score and the panels below are up to date.',
-      );
+      const notes = response.safety.notes;
+      const activeName = activeProfile?.activeProfile?.displayName;
+      if (notes.includes('patient-identity-unverified')) {
+        setNoticeMessage(
+          `No patient name could be read from that file, so it was filed under ${activeName ?? 'this profile'} without an identity check.`,
+        );
+      } else if (notes.includes('report-date-not-detected')) {
+        setNoticeMessage("No report date was printed on that file, so today's date was used instead.");
+      } else {
+        setNoticeMessage('Report analyzed. Your score and the panels below are up to date.');
+      }
       void queryClient.invalidateQueries({ queryKey: ['profile'] });
       void queryClient.invalidateQueries({ queryKey: ['report-detail'] });
     },
     onError: (error) => {
+      if (error instanceof ApiError && error.problem.type === 'https://healthiq/errors/profile-mismatch') {
+        const patientName = error.problem.errors?.find((item) => item.field === 'patientName')?.issue;
+        if (patientName && analyzeMutation.variables?.file) {
+          setMismatchedReport({ file: analyzeMutation.variables.file, patientName });
+          setErrorMessage(null);
+          return;
+        }
+      }
       setErrorMessage(
         error instanceof ApiError ? error.problem.detail : 'Could not read that report. Please try another file.',
       );
@@ -165,12 +191,24 @@ export function HealthProfileFeature() {
           {(isUploadOpen || reports.length === 0) && (
             <ReportUploadCard
               isPending={analyzeMutation.isPending}
-              onAnalyze={(file) => analyzeMutation.mutate(file)}
+              onAnalyze={(file) => analyzeMutation.mutate({ file, profileId: activeProfileId ?? undefined })}
               onDismiss={reports.length > 0 ? () => setIsUploadOpen(false) : undefined}
             />
           )}
 
           {analyzeMutation.isPending && <LoadingState message="Reading and normalizing your report..." />}
+
+          {mismatchedReport && (
+            <ReportPatientDialog
+              patientName={mismatchedReport.patientName}
+              onContinue={(profileId) => {
+                const file = mismatchedReport.file;
+                setMismatchedReport(null);
+                analyzeMutation.mutate({ file, profileId });
+              }}
+              onCancel={() => setMismatchedReport(null)}
+            />
+          )}
 
           <ConsentCard consent={profile.consent} />
 

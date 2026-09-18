@@ -291,7 +291,7 @@ async def extract(file: bytes, *, mode: str) -> OcrEnvelope:
         raise NotImplementedError(f"Unknown OCR mode {mode!r}; expected 'read' or 'layout'")
 
     settings = get_settings()
-    if settings.azure_docintel_endpoint:
+    if not settings.demo_mode and settings.azure_docintel_endpoint:
         return await _extract_live(file, mode=mode)
 
     if _is_pdf(file):

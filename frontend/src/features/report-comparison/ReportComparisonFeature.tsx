@@ -12,6 +12,7 @@ import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader } from '@
 import { Button } from '@/components/ui';
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui';
 import { DoctorPdfCard } from '@/features/share/DoctorPdfCard';
+import { useActiveProfileOptional } from '@/features/patient-profiles';
 import { ApiError } from '@/lib/apiClient';
 
 import { analyzeReport, compareReports, fetchReports } from './api';
@@ -67,7 +68,13 @@ function verdict(bucket: ChangeBucket, parameter: ChangedParameter): { label: st
 
 export function ReportComparisonFeature() {
   const queryClient = useQueryClient();
-  const reportsQuery = useQuery({ queryKey: ['reports'], queryFn: fetchReports });
+  const activeProfile = useActiveProfileOptional();
+  const activeProfileId = activeProfile?.activeProfileId ?? null;
+  const reportsQuery = useQuery({
+    queryKey: ['reports', activeProfileId],
+    queryFn: () => fetchReports(activeProfileId),
+    enabled: !activeProfile || !activeProfile.isLoading,
+  });
   const reports = useMemo(() => reportsQuery.data?.data.reports ?? [], [reportsQuery.data]);
 
   const [source, setSource] = useState<Source>('history');
@@ -101,19 +108,22 @@ export function ReportComparisonFeature() {
   }
 
   const compareMutation = useMutation({
-    mutationFn: () => compareReports(oldReportId, currentReportId),
+    mutationFn: () => compareReports(oldReportId, currentReportId, activeProfileId),
     onSuccess: (response) => applyResult(response.data),
     onError: (error) => handleError(error, 'Something went wrong while comparing these reports.'),
   });
 
   const uploadMutation = useMutation({
     mutationFn: async () => {
-      const older = await analyzeReport(olderFile!);
-      const newer = await analyzeReport(newerFile!);
+      const older = await analyzeReport(olderFile!, activeProfileId);
+      const newer = await analyzeReport(newerFile!, activeProfileId);
       const undated = [older, newer].filter((response) =>
         response.safety.notes.includes('report-date-not-detected'),
       ).length;
-      return { comparison: await compareReports(older.data.reportId, newer.data.reportId), undated };
+      return {
+        comparison: await compareReports(older.data.reportId, newer.data.reportId, activeProfileId),
+        undated,
+      };
     },
     onSuccess: ({ comparison, undated }) => {
       applyResult(comparison.data);

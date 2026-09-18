@@ -9,6 +9,7 @@ are written under `<repo>/.local-blob-store/<container>/...` instead of Azure Bl
 the upload path stays exercisable without deployed infra.
 """
 
+import hashlib
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -75,6 +76,108 @@ async def upload_raw(user_id: str, filename: str, content: bytes, *, consent_ver
     blob = container.get_blob_client(blob_name)
     await blob.upload_blob(content, overwrite=False, metadata=metadata)
     return f"{RAW_UPLOADS_CONTAINER}/{blob_name}"
+
+
+PENDING_PREFIX = "pending"
+
+
+def checksum(content: bytes) -> str:
+    """Stable content hash used to detect a duplicate upload before it is stored twice."""
+    return hashlib.sha256(content).hexdigest()
+
+
+async def upload_pending(
+    account_id: str, document_id: str, filename: str, content: bytes, *, consent_version: str
+) -> str:
+    """Validate and park an upload in the quarantine area.
+
+    A pending blob lives under `pending/{accountId}/...` and carries no `profileId`, so nothing
+    downstream can mistake it for part of a patient's confirmed history before the caller has
+    said which patient it belongs to.
+    """
+    ext = _validate(filename, content)
+    blob_name = f"{PENDING_PREFIX}/{account_id}/{document_id}{ext}"
+    await _write(RAW_UPLOADS_CONTAINER, blob_name, content, {"consentVersion": consent_version})
+    return f"{RAW_UPLOADS_CONTAINER}/{blob_name}"
+
+
+async def promote_pending(blob_path: str, account_id: str, profile_id: str) -> str:
+    """Move a confirmed upload from quarantine to its owning profile's path.
+
+    The destination embeds both identifiers (`{accountId}/{profileId}/{yyyy-mm}/...`) so storage
+    layout mirrors the authorization model: a path alone cannot address another profile's file.
+    """
+    container_name, _, blob_name = blob_path.partition("/")
+    content = await _read(container_name, blob_name)
+
+    ext = Path(blob_name).suffix.lower()
+    yyyy_mm = datetime.now(UTC).strftime("%Y-%m")
+    target = f"{account_id}/{profile_id}/{yyyy_mm}/{uuid.uuid4().hex}{ext}"
+
+    await _write(container_name, target, content, None)
+    await delete(blob_path)
+    return f"{container_name}/{target}"
+
+
+async def read(blob_path: str) -> bytes:
+    """Read an uploaded document back by blob path. Callers must authorize ownership first."""
+    container_name, _, blob_name = blob_path.partition("/")
+    return await _read(container_name, blob_name)
+
+
+async def delete(blob_path: str) -> None:
+    """Best-effort delete; an already-absent blob is not an error."""
+    container_name, _, blob_name = blob_path.partition("/")
+
+    settings = get_settings()
+    if settings.demo_mode or not settings.azure_storage_account_name:
+        target = _LOCAL_STORE_ROOT / container_name / blob_name
+        target.unlink(missing_ok=True)
+        return
+
+    from app.deps import get_blob_service_client
+
+    client = get_blob_service_client()
+    blob = client.get_container_client(container_name).get_blob_client(blob_name)
+    try:
+        await blob.delete_blob()
+    except Exception:  # noqa: BLE001 - SDK raises a generic CosmosResourceNotFoundError analogue
+        return
+
+
+async def _write(
+    container_name: str, blob_name: str, content: bytes, metadata: dict[str, str] | None
+) -> None:
+    settings = get_settings()
+    if settings.demo_mode or not settings.azure_storage_account_name:
+        target = _LOCAL_STORE_ROOT / container_name / blob_name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+        return
+
+    from app.deps import get_blob_service_client
+
+    client = get_blob_service_client()
+    container = client.get_container_client(container_name)
+    await container.get_blob_client(blob_name).upload_blob(
+        content, overwrite=True, metadata=metadata
+    )
+
+
+async def _read(container_name: str, blob_name: str) -> bytes:
+    settings = get_settings()
+    if settings.demo_mode or not settings.azure_storage_account_name:
+        source = _LOCAL_STORE_ROOT / container_name / blob_name
+        if not source.exists():
+            raise NotFoundError("The uploaded document is no longer available")
+        return source.read_bytes()
+
+    from app.deps import get_blob_service_client
+
+    client = get_blob_service_client()
+    blob = client.get_container_client(container_name).get_blob_client(blob_name)
+    stream = await blob.download_blob()
+    return await stream.readall()
 
 
 async def upload_generated_pdf(user_id: str, content: bytes) -> str:

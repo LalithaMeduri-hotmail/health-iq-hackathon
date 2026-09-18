@@ -37,7 +37,20 @@ export class ApiError extends Error {
   }
 }
 
-async function request<TData>(path: string, init?: RequestInit): Promise<ApiResponse<TData>> {
+interface RequestOptions {
+  /**
+   * Treat a 401 as an ordinary outcome instead of a dead session. Bootstrap calls that run on
+   * every page need this: otherwise a stale cookie bounces the visitor to "session expired" from
+   * pages that do not require a session at all, such as sign-up.
+   */
+  allowUnauthorized?: boolean;
+}
+
+async function request<TData>(
+  path: string,
+  init?: RequestInit,
+  options?: RequestOptions,
+): Promise<ApiResponse<TData>> {
   const headers = new Headers(init?.headers);
   headers.set('Accept', 'application/json');
 
@@ -51,7 +64,7 @@ async function request<TData>(path: string, init?: RequestInit): Promise<ApiResp
   const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers, credentials: 'include' });
 
   if (!response.ok) {
-    if (response.status === 401 && !isExpectedUnauthorized(path)) {
+    if (response.status === 401 && !isExpectedUnauthorized(path) && !options?.allowUnauthorized) {
       unauthorizedHandler?.();
     }
     const problem = (await response.json()) as ProblemDetails;
@@ -62,7 +75,8 @@ async function request<TData>(path: string, init?: RequestInit): Promise<ApiResp
 }
 
 export const apiClient = {
-  get: <TData>(path: string) => request<TData>(path, { method: 'GET' }),
+  get: <TData>(path: string, options?: RequestOptions) =>
+    request<TData>(path, { method: 'GET' }, options),
   post: <TData>(path: string, body?: unknown) =>
     request<TData>(path, {
       method: 'POST',
