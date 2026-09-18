@@ -115,6 +115,46 @@ class SafetyViolationError(DomainError):
     status = 422
 
 
+class ProfileArchivedError(DomainError):
+    """The profile exists and belongs to the caller, but is read-only."""
+
+    type_slug = "profile-archived"
+    title = "Profile is archived"
+    status = 403
+
+
+class ConsentRequiredError(DomainError):
+    """Consent for this profile has not been granted, or has been withdrawn."""
+
+    type_slug = "consent-required"
+    title = "Consent required"
+    status = 403
+
+
+class ProfileMismatchError(DomainError):
+    """Resources from more than one patient profile were combined in a single request."""
+
+    type_slug = "profile-mismatch"
+    title = "Profile mismatch"
+    status = 422
+
+
+class ConfirmationRequiredError(DomainError):
+    """The caller must explicitly confirm a document-to-profile association before processing."""
+
+    type_slug = "confirmation-required"
+    title = "User confirmation required"
+    status = 409
+
+
+class InvalidStateTransitionError(DomainError):
+    """The resource is not in a state that allows the requested operation."""
+
+    type_slug = "invalid-state-transition"
+    title = "Invalid state transition"
+    status = 409
+
+
 class RateLimitedError(DomainError):
     type_slug = "rate-limited"
     title = "Rate limited"

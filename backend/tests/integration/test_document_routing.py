@@ -156,9 +156,28 @@ def test_matching_documents_still_analyze(client) -> None:
     brands = [item["brandName"] for item in prescription.json()["data"]["items"]]
     assert brands == ["Glycomet", "Amlong", "Atocor"]
 
-    report = client.post(
+    # The sample report names a patient who is not the account owner, so it has to be filed
+    # under that patient's own profile before it is analyzed.
+    blocked = client.post(
         "/api/v1/reports/analyze",
         data={"consent": "true"},
+        files={"file": ("report.pdf", _read(LAB_REPORT_PDF), "application/pdf")},
+    )
+    assert blocked.status_code == 422
+    assert blocked.json()["type"] == "https://healthiq/errors/profile-mismatch"
+
+    patient = client.post(
+        "/api/v1/profiles",
+        json={
+            "displayName": "Rohan Sharma",
+            "relationshipToAccountOwner": "child",
+            "consentAccepted": True,
+        },
+    ).json()["data"]
+
+    report = client.post(
+        "/api/v1/reports/analyze",
+        data={"consent": "true", "profileId": patient["id"]},
         files={"file": ("report.pdf", _read(LAB_REPORT_PDF), "application/pdf")},
     )
     assert report.status_code == 200

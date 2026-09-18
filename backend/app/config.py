@@ -34,7 +34,11 @@ class Settings(BaseSettings):
     applicationinsights_connection_string: str = ""
 
     demo_mode: bool = True
+    session_cookie_secure: bool = False
     ocr_confidence_threshold: float = 0.75
+    # An upload parked in the quarantine area is deleted if the caller never confirms which
+    # patient profile it belongs to.
+    pending_upload_retention_hours: int = 24
     cors_allowed_origins: str = "http://localhost:5173,http://localhost:3000"
 
     # Public origin the doctor's emailed approval link points back at.

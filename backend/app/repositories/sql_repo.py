@@ -90,11 +90,16 @@ async def search_medicine(active_ingredient: str, strength_value: float, strengt
     return await asyncio.to_thread(search_medicine_sync, active_ingredient, strength_value, strength_unit, dosage_form)
 
 
-async def save_lab_metrics(user_id: str, report_id: str, parameters: list[LabParameter]) -> int:
+async def save_lab_metrics(
+    user_id: str, report_id: str, parameters: list[LabParameter], *, profile_id: str = ""
+) -> int:
     """Insert one `LabMetric` row per canonical parameter of an analyzed report (FR2.4).
 
-    Idempotent: re-analyzing the same `report_id` replaces its rows rather than duplicating them.
-    Returns the number of persisted rows. Real: TODO(D1) `MERGE` into `LabMetric` via pyodbc.
+    Rows are keyed by `(userId, profileId, canonicalKey, reportId)`. `profileId` is part of the
+    key, not a filter applied afterwards, so one family member's values can never be pulled into
+    another's trend chart. Idempotent: re-analyzing the same `report_id` replaces its rows rather
+    than duplicating them. Returns the number of persisted rows.
+    Real: TODO(D1) `MERGE` into `LabMetric` via pyodbc.
     """
     settings = get_settings()
     if not settings.demo_mode and settings.azure_sql_server_fqdn:
@@ -105,7 +110,7 @@ async def save_lab_metrics(user_id: str, report_id: str, parameters: list[LabPar
 
     await _seed_demo_lab_metrics(user_id)
     for parameter in parameters:
-        _DEMO_LAB_METRICS[(user_id, parameter.canonical_key, report_id)] = TrendPoint(
+        _DEMO_LAB_METRICS[(user_id, profile_id, parameter.canonical_key, report_id)] = TrendPoint(
             reportDate=parameter.report_date, value=parameter.value
         )
     return len(parameters)
@@ -115,6 +120,8 @@ async def _seed_demo_lab_metrics(user_id: str) -> None:
     """Back-fill the demo `LabMetric` store from the recorded report history, once per user.
 
     Keeps trend charts populated for the seeded demo history without a live `LabMetric` table.
+    Seeded rows carry the report's own `profileId` (empty for pre-profile history, which resolves
+    to the account holder).
     """
     if user_id in _DEMO_LAB_METRICS_SEEDED:
         return
@@ -125,17 +132,22 @@ async def _seed_demo_lab_metrics(user_id: str) -> None:
     for report in await list_reports(user_id):
         for parameter in report.parameters:
             _DEMO_LAB_METRICS.setdefault(
-                (user_id, parameter.canonical_key, report.id),
+                (user_id, report.profile_id, parameter.canonical_key, report.id),
                 TrendPoint(reportDate=parameter.report_date, value=parameter.value),
             )
 
 
-async def get_trend(user_id: str, canonical_key: str) -> list[TrendPoint]:
-    """Longitudinal history for one lab parameter, scoped by `userId`.
+async def get_trend(
+    user_id: str, canonical_key: str, *, profile_id: str = "", owner_profile_id: str = ""
+) -> list[TrendPoint]:
+    """Longitudinal history for one lab parameter, scoped by account *and* patient profile.
+
+    `owner_profile_id` lets rows written before patient profiles existed (empty `profileId`)
+    resolve to the account holder's own profile instead of disappearing from their chart.
 
     Demo/dev: served from the in-process `LabMetric` store, back-filled from the same recorded
     report history the `reports` container serves. Real: TODO(D1) query `LabMetric` over
-    `IX_LabMetric_Trend(UserId, CanonicalKey, ReportDate)`.
+    `IX_LabMetric_Trend(UserId, ProfileId, CanonicalKey, ReportDate)`.
     """
     settings = get_settings()
     if not settings.demo_mode and settings.azure_sql_server_fqdn:
@@ -147,8 +159,10 @@ async def get_trend(user_id: str, canonical_key: str) -> list[TrendPoint]:
     await _seed_demo_lab_metrics(user_id)
     points = [
         point
-        for (owner, key, _report_id), point in _DEMO_LAB_METRICS.items()
-        if owner == user_id and key == canonical_key
+        for (owner, row_profile, key, _report_id), point in _DEMO_LAB_METRICS.items()
+        if owner == user_id
+        and key == canonical_key
+        and (row_profile or owner_profile_id) == (profile_id or owner_profile_id)
     ]
     return sorted(points, key=lambda point: point.report_date)
 

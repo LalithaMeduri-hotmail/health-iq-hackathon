@@ -57,7 +57,7 @@ def _set_session_cookie(response: Response, user_id: str) -> int:
         max_age=expires_in,
         httponly=True,
         samesite="lax",
-        secure=not settings.demo_mode,
+        secure=settings.session_cookie_secure,
         path="/",
     )
     return expires_in
@@ -138,7 +138,7 @@ async def logout(request: Request, response: Response) -> ApiResponse[dict]:
         path="/",
         httponly=True,
         samesite="lax",
-        secure=not settings.demo_mode,
+        secure=settings.session_cookie_secure,
     )
     return _envelope(request, {"loggedOut": True})
 

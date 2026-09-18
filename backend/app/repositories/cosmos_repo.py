@@ -17,6 +17,9 @@ from pathlib import Path
 
 from app.config import get_settings
 from app.errors import ConflictError, ForbiddenError, NotFoundError
+from app.models.audit import AuditEvent, ConsentRecord
+from app.models.medical_document import MedicalDocument
+from app.models.patient_profile import PatientProfile
 from app.models.profile import CONSENT_PURPOSES, Consent, Profile
 from app.models.report import StoredReport
 
@@ -277,9 +280,12 @@ async def find_account_by_identifier(identifier: str) -> dict | None:
         user_id = _DEMO_ACCOUNT_INDEX.get(key)
         return _DEMO_ACCOUNTS.get(user_id) if user_id else None
 
+    # No `partition_key` means the async SDK fans out across partitions on its own. Passing
+    # `enable_cross_partition_query` (the sync-SDK spelling) is forwarded to the HTTP transport as
+    # an unknown kwarg and raises `TypeError`, which surfaced as a 500 on every register/login.
     query = "SELECT * FROM c WHERE c.usernameKey = @key OR c.mobileKey = @key OR c.emailKey = @key"
     documents = _accounts_container().query_items(
-        query=query, parameters=[{"name": "@key", "value": key}], enable_cross_partition_query=True
+        query=query, parameters=[{"name": "@key", "value": key}]
     )
     async for document in documents:
         return document
@@ -318,3 +324,268 @@ async def save_account(document: dict) -> None:
         _DEMO_ACCOUNTS[document["id"]] = document
         return
     await _accounts_container().upsert_item(document)
+
+
+# --------------------------------------------------------------------------------------
+# Patient profiles, medical documents, consent, audit.
+#
+# Patient profiles live in the existing `profiles` container (partition `/userId` = account id)
+# under an `id` prefixed `pp-`, which keeps them in the account's partition without colliding
+# with the legacy account-level profile document whose `id` equals the account id. The prefix
+# avoids `:` so the id can be used verbatim in a blob path and a local filesystem path.
+# --------------------------------------------------------------------------------------
+
+PATIENT_PROFILE_ID_PREFIX = "pp-"
+
+_DEMO_PATIENT_PROFILES: dict[str, dict] = {}
+_DEMO_DOCUMENTS: dict[str, dict] = {}
+_DEMO_AUDIT: list[dict] = []
+_DEMO_CONSENTS: list[dict] = []
+
+
+def _container(name: str):
+    from app.deps import get_cosmos_client
+
+    settings = get_settings()
+    database = get_cosmos_client().get_database_client(settings.azure_cosmos_database_name)
+    return database.get_container_client(name)
+
+
+def _to_patient_profile(document: dict) -> PatientProfile:
+    return PatientProfile.model_validate(
+        {**document, "etag": document.get("_etag") or document.get("etag")}
+    )
+
+
+async def list_patient_profiles(account_id: str) -> list[PatientProfile]:
+    """Every patient profile owned by one account, oldest first.
+
+    The `accountId` filter is part of the query and the partition key, so a profile belonging to
+    another account cannot be returned even if an `id` were guessed.
+    """
+    if _use_demo_store():
+        documents = [
+            document
+            for document in _DEMO_PATIENT_PROFILES.values()
+            if document["accountId"] == account_id
+        ]
+    else:
+        query = (
+            "SELECT * FROM c WHERE c.accountId = @accountId "
+            "AND STARTSWITH(c.id, @prefix) ORDER BY c.createdAt ASC"
+        )
+        results = _profiles_container().query_items(
+            query=query,
+            parameters=[
+                {"name": "@accountId", "value": account_id},
+                {"name": "@prefix", "value": PATIENT_PROFILE_ID_PREFIX},
+            ],
+            partition_key=account_id,
+        )
+        documents = [document async for document in results]
+
+    profiles = [_to_patient_profile(document) for document in documents]
+    return sorted(profiles, key=lambda profile: profile.created_at)
+
+
+async def get_patient_profile(account_id: str, profile_id: str) -> PatientProfile | None:
+    """Read one patient profile, or `None` when it does not exist *or* is not this account's.
+
+    Both cases collapse to `None` on purpose: the caller turns it into a single `404`, so the
+    response never reveals that another account's profile exists.
+    """
+    if _use_demo_store():
+        document = _DEMO_PATIENT_PROFILES.get(profile_id)
+    else:
+        try:
+            document = await _profiles_container().read_item(
+                item=profile_id, partition_key=account_id
+            )
+        except Exception:  # noqa: BLE001 - SDK raises a generic CosmosResourceNotFoundError
+            document = None
+
+    if document is None or document.get("accountId") != account_id:
+        return None
+    return _to_patient_profile(document)
+
+
+async def save_patient_profile(
+    profile: PatientProfile, *, if_match: str | None = None
+) -> PatientProfile:
+    """Upsert one patient profile under optimistic concurrency."""
+    existing = await get_patient_profile(profile.account_id, profile.id)
+    if if_match is not None and existing is not None and existing.etag is not None:
+        if if_match != existing.etag:
+            raise ConflictError("Profile was modified by another request; re-read it and retry")
+
+    document = json.loads(profile.model_dump_json(by_alias=True, exclude={"etag"}))
+    document["id"] = profile.id
+    # The container partitions on `/userId`; patient profiles carry both so either key works.
+    document["userId"] = profile.account_id
+
+    if _use_demo_store():
+        document["etag"] = _demo_etag(document)
+        _DEMO_PATIENT_PROFILES[profile.id] = document
+        return _to_patient_profile(document)
+
+    saved = await _profiles_container().upsert_item(document)
+    return _to_patient_profile(saved)
+
+
+async def save_document(document_model: MedicalDocument) -> MedicalDocument:
+    """Upsert a medical-document record (pending or confirmed)."""
+    document = json.loads(document_model.model_dump_json(by_alias=True))
+    if _use_demo_store():
+        _DEMO_DOCUMENTS[document_model.id] = document
+        return document_model
+    await _container("documents").upsert_item(document)
+    return document_model
+
+
+async def get_document(account_id: str, document_id: str) -> MedicalDocument | None:
+    """Read one document scoped to the account; `None` when absent or owned by another account."""
+    if _use_demo_store():
+        document = _DEMO_DOCUMENTS.get(document_id)
+    else:
+        try:
+            document = await _container("documents").read_item(
+                item=document_id, partition_key=account_id
+            )
+        except Exception:  # noqa: BLE001 - SDK raises a generic CosmosResourceNotFoundError
+            document = None
+
+    if document is None or document.get("accountId") != account_id:
+        return None
+    return MedicalDocument.model_validate(document)
+
+
+async def list_documents(account_id: str, profile_id: str) -> list[MedicalDocument]:
+    """Documents belonging to one patient profile, newest first."""
+    if _use_demo_store():
+        documents = [
+            document
+            for document in _DEMO_DOCUMENTS.values()
+            if document["accountId"] == account_id and document["profileId"] == profile_id
+        ]
+    else:
+        query = "SELECT * FROM c WHERE c.accountId = @accountId AND c.profileId = @profileId"
+        results = _container("documents").query_items(
+            query=query,
+            parameters=[
+                {"name": "@accountId", "value": account_id},
+                {"name": "@profileId", "value": profile_id},
+            ],
+            partition_key=account_id,
+        )
+        documents = [document async for document in results]
+
+    models = [MedicalDocument.model_validate(document) for document in documents]
+    return sorted(models, key=lambda item: item.created_at, reverse=True)
+
+
+async def delete_document(account_id: str, document_id: str) -> None:
+    """Hard-delete a document record after its ownership has already been verified."""
+    if _use_demo_store():
+        stored = _DEMO_DOCUMENTS.get(document_id)
+        if stored and stored.get("accountId") == account_id:
+            _DEMO_DOCUMENTS.pop(document_id, None)
+        return
+    await _container("documents").delete_item(item=document_id, partition_key=account_id)
+
+
+async def record_audit_event(event: AuditEvent) -> None:
+    """Append one audit event. Callers must pass structural facts only, never medical content."""
+    document = json.loads(event.model_dump_json(by_alias=True))
+    if _use_demo_store():
+        _DEMO_AUDIT.append(document)
+        return
+    await _container("audit").create_item(document)
+
+
+async def list_audit_events(account_id: str, profile_id: str | None = None) -> list[dict]:
+    """Audit trail for one account, optionally narrowed to a single profile."""
+    if _use_demo_store():
+        documents = [event for event in _DEMO_AUDIT if event["accountId"] == account_id]
+    else:
+        query = "SELECT * FROM c WHERE c.accountId = @accountId"
+        results = _container("audit").query_items(
+            query=query,
+            parameters=[{"name": "@accountId", "value": account_id}],
+            partition_key=account_id,
+        )
+        documents = [document async for document in results]
+
+    if profile_id is not None:
+        documents = [event for event in documents if event.get("profileId") == profile_id]
+    return sorted(documents, key=lambda event: event["timestamp"], reverse=True)
+
+
+async def record_consent(record: ConsentRecord) -> None:
+    """Append one immutable consent decision."""
+    document = json.loads(record.model_dump_json(by_alias=True))
+    if _use_demo_store():
+        _DEMO_CONSENTS.append(document)
+        return
+    await _container("consents").create_item(document)
+
+
+async def list_consents(account_id: str, profile_id: str) -> list[dict]:
+    if _use_demo_store():
+        return [
+            record
+            for record in _DEMO_CONSENTS
+            if record["accountId"] == account_id and record["profileId"] == profile_id
+        ]
+
+    query = "SELECT * FROM c WHERE c.accountId = @accountId AND c.profileId = @profileId"
+    results = _container("consents").query_items(
+        query=query,
+        parameters=[
+            {"name": "@accountId", "value": account_id},
+            {"name": "@profileId", "value": profile_id},
+        ],
+        partition_key=account_id,
+    )
+    return [document async for document in results]
+
+
+def owning_profile_id(report: StoredReport, owner_profile_id: str) -> str:
+    """Profile a stored report belongs to, resolving pre-profile records to the owner profile."""
+    return report.profile_id or owner_profile_id
+
+
+async def list_reports_for_profile(
+    account_id: str, profile_id: str, *, owner_profile_id: str
+) -> list[StoredReport]:
+    """Reports belonging to exactly one patient profile, oldest first."""
+    reports = await list_reports(account_id)
+    return [
+        report
+        for report in reports
+        if owning_profile_id(report, owner_profile_id) == profile_id
+    ]
+
+
+async def get_report_for_profile(
+    account_id: str, profile_id: str, report_id: str, *, owner_profile_id: str
+) -> StoredReport:
+    """Read one report and assert it belongs to this profile, else `404` (never `403`)."""
+    reports = await list_reports_for_profile(
+        account_id, profile_id, owner_profile_id=owner_profile_id
+    )
+    report = next((item for item in reports if item.id == report_id), None)
+    if report is None:
+        raise NotFoundError("Report not found")
+    return report
+
+
+def reset_demo_state() -> None:
+    """Clear the in-process patient-profile stores so each test starts from a clean account.
+
+    Only the containers introduced with patient profiles are cleared. The older report/run demo
+    stores are left alone on purpose: existing tests build state across cases against them.
+    """
+    _DEMO_PATIENT_PROFILES.clear()
+    _DEMO_DOCUMENTS.clear()
+    _DEMO_AUDIT.clear()
+    _DEMO_CONSENTS.clear()

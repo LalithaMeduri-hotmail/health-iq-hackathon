@@ -8,5 +8,7 @@
  */
 
 export { AuthProvider, useAuth } from './AuthContext';
+export { AuthLayout } from './AuthLayout';
+export { GuestOnly, RequireAuth } from './AuthRoute';
 export { LoginForm } from './LoginForm';
 export { RegisterForm } from './RegisterForm';

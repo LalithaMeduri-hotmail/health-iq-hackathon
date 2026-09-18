@@ -38,6 +38,7 @@ export interface MealPlan {
 export interface GenerateMealPlanRequest {
   reportId: string;
   preferences: MealPlanPreferences;
+  profileId?: string;
 }
 
 export interface ReportListItem {

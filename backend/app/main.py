@@ -10,11 +10,13 @@ from fastapi.responses import JSONResponse
 
 from app.api import (
     auth,
+    documents,
     mealplan,
     medicines,
     pdf,
     prescriptions,
     profile,
+    profiles,
     reports,
     reviews,
     share,
@@ -93,6 +95,8 @@ def create_app() -> FastAPI:
     app.include_router(pdf.router)
     app.include_router(share.router)
     app.include_router(profile.router)
+    app.include_router(profiles.router)
+    app.include_router(documents.router)
     app.include_router(specialists.router)
     app.include_router(reviews.router)
     app.include_router(auth.router)

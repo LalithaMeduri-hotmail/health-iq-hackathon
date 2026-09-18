@@ -115,44 +115,8 @@
   align-items: center;
   gap: var(--space-3);
   flex-shrink: 0;
-}
-
-.userChip {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
-  border-radius: var(--radius-pill);
-  background: var(--color-ink-100);
-}
-
-.avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 50%;
-  background: var(--gradient-brand);
-  color: var(--color-white);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-}
-
-.userName {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-ink-700);
-}
-
-.signOutButton {
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
+  /* Holds the corner even when the nav (the flex spacer) is hidden for a signed-out visitor. */
+  margin-left: auto;
 }
 
 .signInLink {
@@ -242,10 +206,6 @@
 
 @media (max-width: 860px) {
   .navDesktop {
-    display: none;
-  }
-
-  .userName {
     display: none;
   }
 
