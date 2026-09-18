@@ -72,7 +72,7 @@ async def _write_llm_narrative(summary: str) -> str | None:
     from app.deps import get_chat_client
 
     try:
-        agent = get_chat_client().create_agent(
+        agent = get_chat_client().as_agent(
             instructions=_PROMPT_PATH.read_text(encoding="utf-8"), name="ComparisonAgent"
         )
         response = await agent.run(

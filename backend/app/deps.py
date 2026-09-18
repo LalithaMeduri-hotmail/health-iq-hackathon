@@ -107,12 +107,12 @@ def get_search_client(index_name: str):
 
 @lru_cache
 def get_chat_client():
-    """Cached `AzureOpenAIChatClient` (Microsoft Agent Framework) for all feature agents."""
-    from agent_framework.azure import AzureOpenAIChatClient
+    """Cached `OpenAIChatClient` (Microsoft Agent Framework) in Azure OpenAI mode for all feature agents."""
+    from agent_framework.openai import OpenAIChatClient
 
     settings: Settings = get_settings()
-    return AzureOpenAIChatClient(
-        endpoint=settings.azure_openai_endpoint,
+    return OpenAIChatClient(
+        azure_endpoint=settings.azure_openai_endpoint,
         model=settings.azure_openai_chat_deployment,
         credential=get_azure_credential(),
     )

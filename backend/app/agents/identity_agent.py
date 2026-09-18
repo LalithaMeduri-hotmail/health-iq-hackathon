@@ -87,8 +87,8 @@ async def explain(
             f"Profile name shown to the user: {profile.display_name}. "
             f"Document name shown to the user: {evidence.identity.patient_name or 'not shown'}."
         )
-        client = get_chat_client()
-        response = await client.get_response(prompt, instructions=_SYSTEM_PROMPT)
+        agent = get_chat_client().as_agent(instructions=_SYSTEM_PROMPT, name="IdentityExplainer")
+        response = await agent.run(prompt)
         text = (getattr(response, "text", "") or "").strip()
     except Exception:  # noqa: BLE001 - never let the explainer break the upload flow
         logger.warning("identity narrative unavailable; using deterministic text")

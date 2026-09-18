@@ -256,39 +256,46 @@ def find_alternatives(item: MedicineEntity) -> list[dict]:
     original_price = original_row["mrpInr"] if original_row else max(row["mrpInr"] for row in rows)
     original_label = original_row["brandName"] if original_row else (item.brand_name or rows[0]["brandName"])
 
+    # Every cheaper brand is returned (not just the single cheapest) so the caller can render a
+    # side-by-side comparison; rows are already sorted by mrpInr ascending (best savings first).
     cheaper_candidates = [row for row in rows if row["brandName"] != original_label]
     if not cheaper_candidates:
         return []
-    cheapest = cheaper_candidates[0]  # rows are already sorted by mrpInr ascending
 
     strength_label = f"{item.strength_value:g} {item.strength_unit}"
-    savings_pct = round((original_price - cheapest["mrpInr"]) / original_price * 100) if original_price else 0
 
-    return [
-        {
-            "original": f"{original_label} {strength_label}",
-            "generic": f"{cheapest['genericName']} {strength_label}",
-            "cheaper": f"{cheapest['manufacturer']} {cheapest['brandName']} {strength_label}",
-            # Same values split out, so a caller can render the name and its maker separately.
-            "originalBrand": f"{original_label} {strength_label}",
-            "originalMaker": original_row["manufacturer"] if original_row else "",
-            "cheaperBrand": f"{cheapest['brandName']} {strength_label}",
-            "cheaperMaker": cheapest["manufacturer"],
-            "cheaperGeneric": cheapest["genericName"],
-            "dosageForm": cheapest["dosageForm"],
-            "originalMrpInr": original_price,
-            "cheaperMrpInr": cheapest["mrpInr"],
-            "savingsPct": savings_pct,
-            "savingsEstimated": True,
-            "source": {
-                "sourceName": cheapest["sourceName"],
-                "sourceUrl": cheapest["sourceUrl"],
-                "sourceDate": cheapest["sourceDate"],
-            },
-            "doctorApprovalRequired": True,
-            "matchBasis": "exact-ingredient-strength-form",
-        }
-    ]
+    alternatives = []
+    for candidate in cheaper_candidates:
+        savings_pct = (
+            round((original_price - candidate["mrpInr"]) / original_price * 100) if original_price else 0
+        )
+        alternatives.append(
+            {
+                "original": f"{original_label} {strength_label}",
+                "generic": f"{candidate['genericName']} {strength_label}",
+                "cheaper": f"{candidate['manufacturer']} {candidate['brandName']} {strength_label}",
+                # Same values split out, so a caller can render the name and its maker separately.
+                "originalBrand": f"{original_label} {strength_label}",
+                "originalMaker": original_row["manufacturer"] if original_row else "",
+                "cheaperBrand": f"{candidate['brandName']} {strength_label}",
+                "cheaperMaker": candidate["manufacturer"],
+                "cheaperGeneric": candidate["genericName"],
+                "manufacturer": candidate["manufacturer"],
+                "dosageForm": candidate["dosageForm"],
+                "originalMrpInr": original_price,
+                "cheaperMrpInr": candidate["mrpInr"],
+                "savingsPct": savings_pct,
+                "savingsEstimated": True,
+                "source": {
+                    "sourceName": candidate["sourceName"],
+                    "sourceUrl": candidate["sourceUrl"],
+                    "sourceDate": candidate["sourceDate"],
+                },
+                "doctorApprovalRequired": True,
+                "matchBasis": "exact-ingredient-strength-form",
+            }
+        )
+    return alternatives
 
 
 def catalog_options(query: str | None = None, limit: int = 50) -> list[dict]:

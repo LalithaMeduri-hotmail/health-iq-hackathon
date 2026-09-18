@@ -43,8 +43,12 @@ export interface PrescriptionConfirmResponse {
 
 export interface AlternativeMedicine {
   original: string;
+  originalMaker: string;
   generic: string;
   cheaper: string;
+  cheaperBrand: string;
+  manufacturer: string;
+  dosageForm: string;
   originalMrpInr: number;
   cheaperMrpInr: number;
   savingsPct: number;

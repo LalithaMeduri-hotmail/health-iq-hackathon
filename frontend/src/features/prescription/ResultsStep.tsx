@@ -3,6 +3,7 @@
  * ribbon, source/date provenance - frontend.instructions.md safety UX requirements).
  */
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Badge, Button, Card, LoadingState } from '@/components/ui';
@@ -10,6 +11,7 @@ import { DoctorReviewCard } from '@/features/share/DoctorReviewCard';
 import { fetchReviewStatus } from '@/features/share/api';
 
 import { fetchAlternatives } from './api';
+import { MedicineArt } from './MedicineArt';
 import styles from './prescription.module.css';
 import type { AlternativeMedicine, MedicineEntity } from './types';
 
@@ -21,34 +23,87 @@ interface ResultsStepProps {
   onStartOver: () => void;
 }
 
-function AlternativeCard({ alternative, isApproved }: { alternative: AlternativeMedicine; isApproved: boolean }) {
+interface ComparisonCardProps {
+  title: string;
+  maker: string;
+  mrp: number;
+  dosageForm: string;
+  isCurrent?: boolean;
+  isSelected?: boolean;
+  savingsPct?: number;
+  isApproved?: boolean;
+  source?: AlternativeMedicine['source'];
+  onSelect?: () => void;
+}
+
+function ComparisonCard({
+  title,
+  maker,
+  mrp,
+  dosageForm,
+  isCurrent = false,
+  isSelected = false,
+  savingsPct,
+  isApproved,
+  source,
+  onSelect,
+}: ComparisonCardProps) {
+  const classes = [
+    styles.compCard,
+    isCurrent ? styles.compCardCurrent : styles.compCardAlt,
+    isSelected ? styles.compCardSelected : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <div className={styles.altCard}>
-      <div className={styles.altHeadline}>
-        <span className={styles.altName}>
-          {alternative.generic} <span style={{ fontWeight: 400 }}>({alternative.cheaper})</span>
-        </span>
-        <Badge tone="success">Save {alternative.savingsPct}%</Badge>
+    <div
+      className={classes}
+      role={isCurrent ? undefined : 'radio'}
+      aria-checked={isCurrent ? undefined : isSelected}
+      tabIndex={isCurrent ? undefined : 0}
+      onClick={isCurrent ? undefined : onSelect}
+      onKeyDown={
+        isCurrent
+          ? undefined
+          : (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onSelect?.();
+              }
+            }
+      }
+    >
+      <div className={isCurrent ? styles.compTag : styles.compBanner}>
+        {isCurrent ? 'Currently viewing' : `Save ${savingsPct}% \u2193`}
       </div>
-      <p className={styles.altPrice}>
-        MRP &#8377;{alternative.originalMrpInr.toFixed(2)} &rarr; &#8377;{alternative.cheaperMrpInr.toFixed(2)}{' '}
-        (estimated)
-      </p>
-      <div className={styles.altFooter}>
-        {isApproved ? (
-          <Badge tone="success">Approved by your doctor</Badge>
-        ) : (
-          <Badge tone="warning">Doctor approval required before switching</Badge>
-        )}
-        <span className={styles.source}>
-          Source: {alternative.source.sourceName} &middot; {alternative.source.sourceDate}
-        </span>
-      </div>
+      <MedicineArt seed={`${title}-${maker}`} dosageForm={dosageForm} className={styles.compArt} />
+      <h4 className={styles.compTitle}>{title}</h4>
+      <p className={styles.compMrp}>&#8377;{mrp.toFixed(2)}</p>
+      {maker && <p className={styles.compMaker}>by {maker}</p>}
+      {!isCurrent && (
+        <>
+          {isApproved ? (
+            <Badge tone="success">Approved by your doctor</Badge>
+          ) : (
+            <Badge tone="warning">Doctor approval required</Badge>
+          )}
+          <button type="button" className={styles.compSelectBtn} onClick={(event) => event.stopPropagation()}>
+            {isSelected ? 'Selected \u2713' : 'Select'}
+          </button>
+        </>
+      )}
+      {source && (
+        <p className={styles.compSource}>
+          Source: {source.sourceName} &middot; {source.sourceDate}
+        </p>
+      )}
     </div>
   );
 }
 
 function MedicineAlternatives({ item, isApproved }: { item: MedicineEntity; isApproved: boolean }) {
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const { data, isLoading, isError } = useQuery({
     queryKey: ['medicine-alternatives', item.lineId, item.activeIngredient, item.strengthValue, item.dosageForm],
     queryFn: () => fetchAlternatives([item]),
@@ -64,16 +119,37 @@ function MedicineAlternatives({ item, isApproved }: { item: MedicineEntity; isAp
   if (isError || !data) {
     return <p>Could not load alternatives right now.</p>;
   }
-  if (data.data.alternatives.length === 0) {
+  const alternatives = data.data.alternatives;
+  if (alternatives.length === 0) {
     return <p>No safe alternative meets our matching rules yet.</p>;
   }
 
+  const current = alternatives[0];
+
   return (
-    <>
-      {data.data.alternatives.map((alternative) => (
-        <AlternativeCard key={alternative.cheaper} alternative={alternative} isApproved={isApproved} />
+    <div className={styles.comparisonRow}>
+      <ComparisonCard
+        isCurrent
+        title={current.original}
+        maker={current.originalMaker}
+        mrp={current.originalMrpInr}
+        dosageForm={current.dosageForm}
+      />
+      {alternatives.map((alternative) => (
+        <ComparisonCard
+          key={alternative.cheaper}
+          title={alternative.cheaperBrand}
+          maker={alternative.manufacturer}
+          mrp={alternative.cheaperMrpInr}
+          dosageForm={alternative.dosageForm}
+          savingsPct={alternative.savingsPct}
+          isApproved={isApproved}
+          source={alternative.source}
+          isSelected={selectedKey === alternative.cheaper}
+          onSelect={() => setSelectedKey(alternative.cheaper)}
+        />
       ))}
-    </>
+    </div>
   );
 }
 

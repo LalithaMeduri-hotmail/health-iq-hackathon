@@ -6,14 +6,14 @@
   justify-content: center;
   gap: var(--space-4, 1rem);
   padding: var(--space-8, 2rem) var(--space-4, 1rem);
-  background: var(--color-surface, #fff);
+  background: var(--color-bg-app);
 }
 
 .authBrand {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2, 0.5rem);
-  color: var(--color-text, #101828);
+  color: var(--color-text-primary);
   font-size: 1.35rem;
   font-weight: 700;
   text-decoration: none;
@@ -64,7 +64,7 @@
 }
 
 .formError {
-  color: var(--color-danger, #c0362c);
+  color: var(--color-danger);
   font-size: 0.9rem;
   margin: 0;
 }
@@ -73,9 +73,9 @@
   margin: 0;
   padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
   font-size: 0.9rem;
-  color: var(--color-text, #1d2939);
-  background: var(--color-warning-soft, rgba(234, 170, 8, 0.12));
-  border: 1px solid var(--color-warning, rgba(234, 170, 8, 0.45));
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
   border-radius: 0.5rem;
 }
 

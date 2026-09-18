@@ -157,16 +157,24 @@ def glycomet_item() -> MedicineEntity:
 
 
 def test_find_alternatives_ranks_by_price_and_computes_savings(glycomet_item: MedicineEntity) -> None:
-    [alternative] = find_alternatives(glycomet_item)
+    alternatives = find_alternatives(glycomet_item)
 
-    assert alternative["original"] == "Glycomet 500 mg"
-    assert alternative["cheaper"] == "Cipla Ltd Metfor 500 mg"
-    assert alternative["originalMrpInr"] == 32.50
-    assert alternative["cheaperMrpInr"] == 18.90
-    assert alternative["savingsPct"] == 42
-    assert alternative["doctorApprovalRequired"] is True
-    assert alternative["savingsEstimated"] is True
-    assert alternative["source"]["sourceUrl"]
+    # Every cheaper brand is returned (not just the single cheapest), ordered by price ascending.
+    assert [alternative["cheaper"] for alternative in alternatives] == [
+        "Cipla Ltd Metfor 500 mg",
+        "Franco-Indian Pharma Glyciphage 500 mg",
+    ]
+
+    cheapest = alternatives[0]
+    assert cheapest["original"] == "Glycomet 500 mg"
+    assert cheapest["originalMrpInr"] == 32.50
+    assert cheapest["cheaperMrpInr"] == 18.90
+    assert cheapest["savingsPct"] == 42
+    assert cheapest["manufacturer"] == "Cipla Ltd"
+    assert cheapest["dosageForm"] == "tablet"
+    assert cheapest["doctorApprovalRequired"] is True
+    assert cheapest["savingsEstimated"] is True
+    assert cheapest["source"]["sourceUrl"]
 
 
 def test_find_alternatives_returns_empty_without_full_match_keys() -> None:

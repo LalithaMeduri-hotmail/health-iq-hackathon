@@ -94,8 +94,12 @@ class AlternativeMedicine(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     original: str
+    original_maker: str = Field(alias="originalMaker", default="")
     generic: str
     cheaper: str
+    cheaper_brand: str = Field(alias="cheaperBrand", default="")
+    manufacturer: str = Field(default="")
+    dosage_form: str = Field(alias="dosageForm", default="")
     original_mrp_inr: float = Field(alias="originalMrpInr")
     cheaper_mrp_inr: float = Field(alias="cheaperMrpInr")
     savings_pct: float = Field(alias="savingsPct")
