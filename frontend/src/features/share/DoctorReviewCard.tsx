@@ -13,7 +13,7 @@ import { ApiError } from '@/lib/apiClient';
 import { fetchDoctors, fetchReviewStatus, requestReview, reviewDocumentUrl } from './api';
 import styles from './share.module.css';
 import type { BadgeTone } from '@/components/ui';
-import type { PrescriptionKind, ReviewDecision, ReviewState, ReviewSummary } from './api';
+import type { ReviewDecision, ReviewState, ReviewSummary } from './api';
 
 const STATUS_COPY: Record<ReviewState, { label: string; tone: BadgeTone }> = {
   pending: { label: 'Waiting for the doctor', tone: 'info' },
@@ -29,28 +29,14 @@ const DECISION_COPY: Record<ReviewDecision, { label: string; tone: BadgeTone }> 
   rejected: { label: 'Not approved', tone: 'danger' },
 };
 
-const DOCUMENT_COPY: Record<PrescriptionKind, string> = {
-  approved: 'New Health IQ prescription',
-  followup: 'Follow-up required',
-};
+const DOCUMENT_COPY = 'Health IQ review summary';
 
 interface DoctorReviewCardProps {
   runId: string;
   /** Read off the uploaded prescription, when the reader found a name there. */
   detectedPatientName?: string | null;
-}
-
-/** Which of the two outcome documents this review actually produced. */
-function documentKinds(review: ReviewSummary): PrescriptionKind[] {
-  const verdicts = new Set(review.decisions.map((entry) => entry.decision));
-  const kinds: PrescriptionKind[] = [];
-  if (verdicts.has('approved')) {
-    kinds.push('approved');
-  }
-  if (verdicts.has('changes_requested') || verdicts.has('rejected')) {
-    kinds.push('followup');
-  }
-  return kinds;
+  /** `lineId -> cheaperBrand` the patient picked, so the doctor rules on that switch. */
+  selections?: Record<string, string>;
 }
 
 function ReviewRow({ review }: { review: ReviewSummary }) {
@@ -69,40 +55,75 @@ function ReviewRow({ review }: { review: ReviewSummary }) {
       </p>
 
       {review.decisions.length > 0 && (
-        <ul className={styles.verdictList}>
-          {review.decisions.map((verdict) => (
-            <li key={verdict.lineId} className={styles.verdictRow}>
-              <span>{verdict.label}</span>
-              <Badge tone={DECISION_COPY[verdict.decision].tone}>
-                {DECISION_COPY[verdict.decision].label}
-              </Badge>
-            </li>
-          ))}
-        </ul>
+        <div className={styles.verdictTableWrap}>
+          <table className={styles.verdictTable}>
+            <thead>
+              <tr>
+                <th scope="col">Your medicine</th>
+                <th scope="col">Health IQ alternative</th>
+                <th scope="col">Doctor&apos;s decision</th>
+              </tr>
+            </thead>
+            <tbody>
+              {review.decisions.map((verdict) => (
+                <tr key={verdict.lineId}>
+                  <td>
+                    <span className={styles.medName}>{verdict.label}</span>
+                    {verdict.maker && <span className={styles.maker}>{verdict.maker}</span>}
+                  </td>
+                  <td>
+                    {verdict.alternative ? (
+                      <>
+                        <span className={styles.medName}>{verdict.alternative}</span>
+                        {verdict.alternativeMaker && (
+                          <span className={styles.maker}>{verdict.alternativeMaker}</span>
+                        )}
+                        {verdict.originalMrpInr > 0 && verdict.cheaperMrpInr > 0 && (
+                          <span className={styles.price}>
+                            ₹{verdict.originalMrpInr.toFixed(2)} → ₹{verdict.cheaperMrpInr.toFixed(2)}
+                            {verdict.savingsPct > 0 ? ` · about ${verdict.savingsPct}% less` : ''}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className={styles.maker}>No equivalent found</span>
+                    )}
+                  </td>
+                  <td>
+                    <Badge tone={DECISION_COPY[verdict.decision].tone}>
+                      {DECISION_COPY[verdict.decision].label}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {review.notes && <blockquote className={styles.notes}>{review.notes}</blockquote>}
 
-      {documentKinds(review).length > 0 && (
+      {review.decisions.length > 0 && (
         <p className={styles.documentRow}>
-          {documentKinds(review).map((kind) => (
-            <a
-              key={kind}
-              className={styles.documentLink}
-              href={reviewDocumentUrl(review.reviewId, kind)}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {DOCUMENT_COPY[kind]} (PDF)
-            </a>
-          ))}
+          <a
+            className={styles.documentLink}
+            href={reviewDocumentUrl(review.reviewId)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {DOCUMENT_COPY} (PDF)
+          </a>
         </p>
       )}
     </li>
   );
 }
 
-export function DoctorReviewCard({ runId, detectedPatientName }: DoctorReviewCardProps) {
+export function DoctorReviewCard({
+  runId,
+  detectedPatientName,
+  selections = {},
+}: DoctorReviewCardProps) {
   const queryClient = useQueryClient();
   const { account } = useAuth();
   const [selected, setSelected] = useState<string[]>([]);
@@ -131,7 +152,7 @@ export function DoctorReviewCard({ runId, detectedPatientName }: DoctorReviewCar
   });
 
   const sendMutation = useMutation({
-    mutationFn: () => requestReview(runId, selected, patientName.trim()),
+    mutationFn: () => requestReview(runId, selected, patientName.trim(), selections),
     onSuccess: () => {
       setErrorMessage(null);
       setSelected([]);

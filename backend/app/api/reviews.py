@@ -42,10 +42,7 @@ _DECISION_OPTIONS = (
 _DECISION_LABELS = {value: label for value, label, _ in _DECISION_OPTIONS}
 _DECISION_SYMBOLS = {value: symbol for value, _, symbol in _DECISION_OPTIONS}
 
-_DOCUMENT_COPY = {
-    "approved": "New Health IQ prescription (PDF)",
-    "followup": "Follow-up required (PDF)",
-}
+_DOCUMENT_COPY = "Health IQ review summary (PDF)"
 
 
 def _envelope(request: Request, data):
@@ -81,7 +78,7 @@ async def request_review(
         run_id=body.run_id,
         doctor_ids=body.doctor_ids,
         medicines=doctor_pdf.medicine_names(run),
-        lines=doctor_pdf.medicine_lines(run),
+        lines=doctor_pdf.medicine_lines(run, body.selections),
         patient_name=body.patient_name or await patients.display_name(current_user.user_id),
         pdf_filename=filename,
         pdf_bytes=content,
@@ -122,35 +119,34 @@ async def review_document(token: str) -> Response:
     return _pdf_response(filename, content)
 
 
-@router.get("/reviews/{token}/prescription/{kind}")
-async def review_outcome_document(token: str, kind: str) -> Response:
-    """The clinician's copy of what they just signed: `approved` plan or `followup` list."""
+@router.get("/reviews/{token}/prescription")
+async def review_outcome_document(token: str) -> Response:
+    """The clinician's copy of what they just signed: every medicine, alternative and verdict."""
     record = await reviews.get_review(token)
-    return _pdf_response(*await _build_outcome(record, kind))
+    return _pdf_response(*await _build_outcome(record))
 
 
-@router.get("/reviews/{review_id}/documents/{kind}")
+@router.get("/reviews/{review_id}/documents")
 async def patient_outcome_document(
     review_id: str,
-    kind: str,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> Response:
     """The patient's copy of the same document, addressed by review id rather than the token."""
     record = await reviews.get_review_for_patient(current_user.user_id, review_id)
-    return _pdf_response(*await _build_outcome(record, kind))
+    return _pdf_response(*await _build_outcome(record))
 
 
-async def _build_outcome(record: dict, kind: str) -> tuple[str, bytes]:
+async def _build_outcome(record: dict) -> tuple[str, bytes]:
     run = await cosmos_repo.get_run(record["userId"], record["runId"])
     patient_name = record.get("patientName") or await patients.display_name(record["userId"])
-    return doctor_pdf.build_outcome_document(run, record, kind, patient_name)
+    return doctor_pdf.build_outcome_document(run, record, patient_name)
 
 
 @router.get("/reviews/{token}", response_class=HTMLResponse)
 async def review_page(token: str) -> HTMLResponse:
     """Anonymous confirm page. Reading it records nothing."""
     record = await reviews.get_review(token)
-    return HTMLResponse(_page(token, record))
+    return _html_response(_page(token, record))
 
 
 @router.post("/reviews/{token}/decision", response_class=HTMLResponse)
@@ -169,7 +165,14 @@ async def submit_decision(token: str, request: Request) -> HTMLResponse:
     record = await reviews.record_decision(
         token, decisions=decisions, notes=str(form.get("notes", ""))
     )
-    return HTMLResponse(_page(token, record))
+    return _html_response(_page(token, record))
+
+
+def _html_response(markup: str) -> HTMLResponse:
+    """Never cached: a clinician revisiting the link must see the decision state as it is now."""
+    return HTMLResponse(
+        markup, headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+    )
 
 
 def _named(name: str, maker: str) -> str:
@@ -236,18 +239,13 @@ def _decide_form(token: str, lines: list[dict]) -> str:
 
 
 def _outcome_links(token: str, record: dict) -> str:
-    kinds = {entry["decision"] for entry in record.get("decisions", [])}
-    available = [
-        kind
-        for kind, decisions in (("approved", {"approved"}), ("followup", {"changes_requested", "rejected"}))
-        if kinds & decisions
-    ]
-    links = "".join(
-        f'<a class="doc" href="/api/v1/reviews/{html.escape(token)}/prescription/{kind}" '
-        f'target="_blank" rel="noopener">{_DOCUMENT_COPY[kind]}</a> '
-        for kind in available
+    if not record.get("decisions"):
+        return ""
+    link = (
+        f'<a class="doc" href="/api/v1/reviews/{html.escape(token)}/prescription" '
+        f'target="_blank" rel="noopener">{_DOCUMENT_COPY}</a>'
     )
-    return f"<p><strong>Documents generated for the patient:</strong></p><p>{links}</p>" if links else ""
+    return f"<p><strong>Document generated for the patient:</strong></p><p>{link}</p>"
 
 
 def _decided_summary(record: dict) -> str:

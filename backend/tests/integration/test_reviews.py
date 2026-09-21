@@ -118,7 +118,7 @@ def test_the_request_carries_the_patient_name_from_the_prescription(client, monk
     assert stored["patientName"] == "Ramesh Kumar"
 
 
-async def test_the_new_prescription_is_named_after_the_patient(client, monkeypatch) -> None:
+async def test_the_summary_document_is_named_after_the_patient(client, monkeypatch) -> None:
     monkeypatch.setattr(email, "send", _noop_send)
     run_id = _analyzed_run_id(client)
     client.post(
@@ -134,10 +134,45 @@ async def test_the_new_prescription_is_named_after_the_patient(client, monkeypat
         decisions=[{"lineId": "li-1", "label": "Glycomet 500mg", "decision": "approved"}],
     )
 
-    response = client.get(f"/api/v1/reviews/{stored['reviewId']}/documents/approved")
+    response = client.get(f"/api/v1/reviews/{stored['reviewId']}/documents")
 
     assert response.status_code == 200
-    assert "HealthIQ-Prescription-Ramesh-Kumar" in response.headers["content-disposition"]
+    assert "HealthIQ-Review-Summary-Ramesh-Kumar" in response.headers["content-disposition"]
+
+
+async def test_the_alternative_the_patient_picked_is_what_the_doctor_is_asked_about(
+    client, monkeypatch
+) -> None:
+    monkeypatch.setattr(email, "send", _noop_send)
+    run_id = _analyzed_run_id(client, "Pantocid 40mg 1-0-0 x14 days")
+
+    client.post(
+        "/api/v1/reviews/request",
+        json={
+            "runId": run_id,
+            "doctorIds": ["doc-001"],
+            "patientName": "Ramesh Kumar",
+            # Not the cheapest match - picking it proves the patient's choice beats the default.
+            "selections": {"li-1": "Pan 40 mg"},
+        },
+    )
+
+    _, stored = next(iter(sql_repo._DEMO_DOCTOR_REVIEWS.items()))
+    assert stored["lines"][0]["alternative"] == "Pan 40 mg"
+    assert stored["lines"][0]["alternativeMaker"] == "Alkem Labs"
+
+
+async def test_an_unpicked_line_falls_back_to_the_best_value_equivalent(client, monkeypatch) -> None:
+    monkeypatch.setattr(email, "send", _noop_send)
+    run_id = _analyzed_run_id(client, "Pantocid 40mg 1-0-0 x14 days")
+
+    client.post(
+        "/api/v1/reviews/request",
+        json={"runId": run_id, "doctorIds": ["doc-001"], "patientName": "Ramesh Kumar"},
+    )
+
+    _, stored = next(iter(sql_repo._DEMO_DOCTOR_REVIEWS.items()))
+    assert stored["lines"][0]["alternative"] == "Pantosec 40 mg"
 
 
 async def test_a_missing_medicine_verdict_is_rejected(client, monkeypatch) -> None:
@@ -169,7 +204,17 @@ async def test_doctor_approval_is_visible_to_the_patient(client, monkeypatch) ->
     assert body["reviews"][0]["status"] == "approved"
     assert body["reviews"][0]["notes"] == "Fine to switch at the next refill."
     assert body["reviews"][0]["decisions"] == [
-        {"lineId": "li-1", "label": "Glycomet 500mg", "decision": "approved"}
+        {
+            "lineId": "li-1",
+            "label": "Glycomet 500mg",
+            "decision": "approved",
+            "maker": "USV Pvt Ltd",
+            "alternative": "Metfor 500 mg",
+            "alternativeMaker": "Cipla Ltd",
+            "savingsPct": 42,
+            "originalMrpInr": 32.5,
+            "cheaperMrpInr": 18.9,
+        }
     ]
 
 
@@ -188,7 +233,7 @@ async def test_a_partly_approved_review_is_not_approved_overall(client, monkeypa
     assert body["approved"] is False
 
 
-async def test_each_verdict_group_becomes_its_own_health_iq_document(client, monkeypatch) -> None:
+async def test_a_decided_review_becomes_one_health_iq_document(client, monkeypatch) -> None:
     monkeypatch.setattr(email, "send", _noop_send)
     run_id = _analyzed_run_id(client, "Glycomet 500mg 1-0-1 x10 days", "Amlong 5mg 0-0-1 x30 days")
     token = await _issue(run_id)
@@ -199,25 +244,25 @@ async def test_each_verdict_group_becomes_its_own_health_iq_document(client, mon
         data={"decision-li-1": "approved", "decision-li-2": "changes_requested", "notes": "Halve the dose."},
     )
 
-    for kind in ("approved", "followup"):
-        doctor_copy = client.get(f"/api/v1/reviews/{token}/prescription/{kind}")
-        patient_copy = client.get(f"/api/v1/reviews/{review_id}/documents/{kind}")
-        assert doctor_copy.status_code == 200
-        assert doctor_copy.content.startswith(b"%PDF")
-        assert patient_copy.status_code == 200
-        assert patient_copy.content.startswith(b"%PDF")
-        assert "HealthIQ-" in patient_copy.headers["content-disposition"]
+    doctor_copy = client.get(f"/api/v1/reviews/{token}/prescription")
+    patient_copy = client.get(f"/api/v1/reviews/{review_id}/documents")
+    assert doctor_copy.status_code == 200
+    assert doctor_copy.content.startswith(b"%PDF")
+    assert patient_copy.status_code == 200
+    assert patient_copy.content.startswith(b"%PDF")
+    assert "HealthIQ-Review-Summary-" in patient_copy.headers["content-disposition"]
 
 
-async def test_a_document_with_no_medicines_in_it_is_not_offered(client, monkeypatch) -> None:
+async def test_the_document_is_only_offered_once_a_decision_exists(client, monkeypatch) -> None:
     monkeypatch.setattr(email, "send", _noop_send)
     token = await _issue(_analyzed_run_id(client))
 
+    assert client.get(f"/api/v1/reviews/{token}/prescription").status_code == 404
+
     page = client.post(f"/api/v1/reviews/{token}/decision", data={"decision-li-1": "approved", "notes": ""})
 
-    assert "/prescription/approved" in page.text
-    assert "/prescription/followup" not in page.text
-    assert client.get(f"/api/v1/reviews/{token}/prescription/followup").status_code == 404
+    assert page.text.count("/prescription") == 1
+    assert client.get(f"/api/v1/reviews/{token}/prescription").status_code == 200
 
 
 async def test_another_patient_cannot_read_a_review_document(client, monkeypatch) -> None:

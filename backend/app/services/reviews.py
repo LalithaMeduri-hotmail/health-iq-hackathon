@@ -20,8 +20,32 @@ _TOKEN_BYTES = 16  # 128-bit URL-safe token
 _DECISIONS = {"approved", "changes_requested", "rejected"}
 
 
+_PROPOSAL_FIELDS = (
+    "maker",
+    "alternative",
+    "alternativeMaker",
+    "savingsPct",
+    "originalMrpInr",
+    "cheaperMrpInr",
+)
+
+
 def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _verdicts(record: dict) -> list[MedicineVerdict]:
+    """Each verdict rejoined to the switch it answered, so the app can show both side by side."""
+    proposals = {line["lineId"]: line for line in record.get("lines", [])}
+    merged = []
+    for entry in record.get("decisions", []):
+        proposal = proposals.get(entry["lineId"], {})
+        merged.append(
+            MedicineVerdict.model_validate(
+                entry | {key: proposal[key] for key in _PROPOSAL_FIELDS if proposal.get(key)}
+            )
+        )
+    return merged
 
 
 def _summary(record: dict, review_id: str = "") -> ReviewSummary:
@@ -36,7 +60,7 @@ def _summary(record: dict, review_id: str = "") -> ReviewSummary:
         decidedAt=record.get("decidedAt"),
         notes=record.get("notes") or None,
         delivery=record.get("delivery", "sent"),
-        decisions=[MedicineVerdict.model_validate(entry) for entry in record.get("decisions", [])],
+        decisions=_verdicts(record),
     )
 
 

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiResponse } from '@/lib/types';
 
 import { DoctorReviewCard } from './DoctorReviewCard';
-import type { ReviewStatusResponse, ReviewSummary } from './api';
+import type { MedicineVerdict, ReviewStatusResponse, ReviewSummary } from './api';
 
 vi.mock('@/features/auth', () => ({ useAuth: () => ({ account: null }) }));
 
@@ -33,6 +33,18 @@ function envelope<T>(data: T): ApiResponse<T> {
   };
 }
 
+function verdict(overrides: Partial<MedicineVerdict> & Pick<MedicineVerdict, 'lineId' | 'label' | 'decision'>): MedicineVerdict {
+  return {
+    maker: '',
+    alternative: '',
+    alternativeMaker: '',
+    savingsPct: 0,
+    originalMrpInr: 0,
+    cheaperMrpInr: 0,
+    ...overrides,
+  };
+}
+
 function review(overrides: Partial<ReviewSummary> = {}): ReviewSummary {
   return {
     reviewId: 'abc12345',
@@ -46,8 +58,17 @@ function review(overrides: Partial<ReviewSummary> = {}): ReviewSummary {
     notes: 'Halve the Amlong dose.',
     delivery: 'sent',
     decisions: [
-      { lineId: 'li-1', label: 'Glycomet 500mg', decision: 'approved' },
-      { lineId: 'li-2', label: 'Amlong 5mg', decision: 'rejected' },
+      verdict({
+        lineId: 'li-1',
+        label: 'Glycomet 500mg',
+        decision: 'approved',
+        alternative: 'Metfor 500 mg',
+        alternativeMaker: 'Cipla Ltd',
+        savingsPct: 6,
+        originalMrpInr: 20.1,
+        cheaperMrpInr: 18.9,
+      }),
+      verdict({ lineId: 'li-2', label: 'Amlong 5mg', decision: 'rejected' }),
     ],
     ...overrides,
   };
@@ -102,7 +123,7 @@ describe('DoctorReviewCard', () => {
     await user.click(screen.getByRole('button', { name: 'Email the review request' }));
 
     await waitFor(() => expect(api.requestReview).toHaveBeenCalledOnce());
-    expect(api.requestReview).toHaveBeenCalledWith('run-1', ['doc-001'], 'Ramesh Kumar');
+    expect(api.requestReview).toHaveBeenCalledWith('run-1', ['doc-001'], 'Ramesh Kumar', {});
   });
 
   it('shows the doctor verdict for each medicine separately', async () => {
@@ -114,30 +135,40 @@ describe('DoctorReviewCard', () => {
     expect(screen.getByText('Not approved')).toBeInTheDocument();
   });
 
-  it('offers both outcome documents when the verdicts are mixed', async () => {
+  it('tables each medicine against the alternative it was judged on', async () => {
     renderCard({ runId: 'run-1', reviews: [review()], approved: false });
 
-    expect(await screen.findByRole('link', { name: /New Health IQ prescription/ })).toHaveAttribute(
+    expect(await screen.findByRole('columnheader', { name: 'Your medicine' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Health IQ alternative' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: "Doctor's decision" })).toBeInTheDocument();
+
+    expect(screen.getByText('Metfor 500 mg')).toBeInTheDocument();
+    expect(screen.getByText(/about 6% less/)).toBeInTheDocument();
+    // The refused line had no equivalent, so the cell has to say so rather than sit empty.
+    expect(screen.getByText('No equivalent found')).toBeInTheDocument();
+  });
+
+  it('offers one summary document covering every verdict', async () => {
+    renderCard({ runId: 'run-1', reviews: [review()], approved: false });
+
+    const links = await screen.findAllByRole('link', { name: /Health IQ review summary/ });
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute(
       'href',
-      expect.stringContaining('/api/v1/reviews/abc12345/documents/approved'),
-    );
-    expect(screen.getByRole('link', { name: /Follow-up required/ })).toHaveAttribute(
-      'href',
-      expect.stringContaining('/api/v1/reviews/abc12345/documents/followup'),
+      expect.stringContaining('/api/v1/reviews/abc12345/documents'),
     );
   });
 
-  it('offers only the prescription when nothing was refused', async () => {
+  it('offers the same single document when nothing was refused', async () => {
     const approved = review({
       status: 'approved',
-      decisions: [{ lineId: 'li-1', label: 'Glycomet 500mg', decision: 'approved' }],
+      decisions: [verdict({ lineId: 'li-1', label: 'Glycomet 500mg', decision: 'approved' })],
     });
     renderCard({ runId: 'run-1', reviews: [approved], approved: true });
 
     expect(
-      await screen.findByRole('link', { name: /New Health IQ prescription/ }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Follow-up required/ })).not.toBeInTheDocument();
+      await screen.findAllByRole('link', { name: /Health IQ review summary/ }),
+    ).toHaveLength(1);
   });
 
   it('offers no document while the doctor has not answered', async () => {

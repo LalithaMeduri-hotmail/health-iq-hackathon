@@ -192,26 +192,57 @@
   color: var(--color-ink-700);
 }
 
-.verdictList {
-  list-style: none;
+.verdictTableWrap {
   margin: var(--space-3) 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.verdictRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  padding: var(--space-2) var(--space-3);
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
+}
+
+.verdictTable {
+  width: 100%;
+  border-collapse: collapse;
   font-size: var(--font-size-sm);
+}
+
+.verdictTable th {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.verdictTable td {
+  padding: var(--space-2) var(--space-3);
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.verdictTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.verdictTable td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.medName {
+  display: block;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-ink-900);
+}
+
+.maker,
+.price {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 
 .documentRow {

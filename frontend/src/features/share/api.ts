@@ -17,13 +17,16 @@ export type ReviewState = 'pending' | 'approved' | 'changes_requested' | 'reject
 
 export type ReviewDecision = 'approved' | 'changes_requested' | 'rejected';
 
-/** The two documents a decided review produces. */
-export type PrescriptionKind = 'approved' | 'followup';
-
 export interface MedicineVerdict {
   lineId: string;
   label: string;
   decision: ReviewDecision;
+  maker: string;
+  alternative: string;
+  alternativeMaker: string;
+  savingsPct: number;
+  originalMrpInr: number;
+  cheaperMrpInr: number;
 }
 
 export interface RegisteredDoctor {
@@ -62,11 +65,13 @@ export async function requestReview(
   runId: string,
   doctorIds: string[],
   patientName: string,
+  selections: Record<string, string> = {},
 ): Promise<ApiResponse<{ reviews: ReviewSummary[] }>> {
   return apiClient.post<{ reviews: ReviewSummary[] }>('/api/v1/reviews/request', {
     runId,
     doctorIds,
     patientName,
+    selections,
   });
 }
 
@@ -86,6 +91,6 @@ export async function revokeShareLink(shareId: string): Promise<ApiResponse<{ re
 }
 
 /** Direct link to a decided review's PDF; served by the API, so it is a navigation, not a fetch. */
-export function reviewDocumentUrl(reviewId: string, kind: PrescriptionKind): string {
-  return absoluteApiUrl(`/api/v1/reviews/${encodeURIComponent(reviewId)}/documents/${kind}`);
+export function reviewDocumentUrl(reviewId: string): string {
+  return absoluteApiUrl(`/api/v1/reviews/${encodeURIComponent(reviewId)}/documents`);
 }
