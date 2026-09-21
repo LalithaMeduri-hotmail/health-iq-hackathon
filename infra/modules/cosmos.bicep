@@ -43,6 +43,11 @@ var containerDefs = [
     name: 'consents'
     partitionKey: '/accountId'
   }
+  {
+    // Health IQ prescriptions issued once a clinician has decided, kept as the patient's history.
+    name: 'prescriptions'
+    partitionKey: '/accountId'
+  }
 ]
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {

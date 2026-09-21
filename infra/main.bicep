@@ -76,6 +76,9 @@ param sqlDatabaseSkuName string = 'Basic'
 @description('Azure SQL database SKU tier.')
 param sqlDatabaseSkuTier string = 'Basic'
 
+@description('Where Communication Services stores email content at rest. Not a deployment region.')
+param emailDataLocation string = 'United States'
+
 var tags = {
   project: 'health-iq'
   environment: environmentName
@@ -97,6 +100,8 @@ var appInsightsName = take('${namePrefix}-appi-${resourceToken}', 260)
 var containerAppsEnvName = take('${namePrefix}-cae-${resourceToken}', 32)
 var backendAppName = take('${namePrefix}-backend-${resourceToken}', 32)
 var frontendAppName = take('${namePrefix}-frontend-${resourceToken}', 32)
+var emailServiceName = take('${namePrefix}-email-${resourceToken}', 63)
+var communicationServiceName = take('${namePrefix}-acs-${resourceToken}', 63)
 
 var developerPrincipalIds = empty(developerPrincipalId) ? [] : [
   developerPrincipalId
@@ -217,6 +222,18 @@ module openAi 'modules/openai.bicep' = {
   }
 }
 
+// ---- Outbound email (doctor-review notifications) ----
+module communication 'modules/communication.bicep' = {
+  name: 'communication'
+  params: {
+    emailServiceName: emailServiceName
+    communicationServiceName: communicationServiceName
+    dataLocation: emailDataLocation
+    senderPrincipalIds: dataPlanePrincipalIds
+    tags: tags
+  }
+}
+
 // ---- Centralize configuration in Key Vault so backend `config.py` reads the same way in every environment ----
 // The secret name must be a deploy-time constant, so it is built from the local `keyVaultName`
 // variable rather than a module output. Bicep infers the dependency on the keyVault module
@@ -324,5 +341,7 @@ output openAiEmbeddingDeployment string = openAi.outputs.embeddingDeploymentName
 output foundryProjectName string = openAi.outputs.projectName
 output appInsightsConnectionString string = monitoring.outputs.appInsightsConnectionString
 output logAnalyticsWorkspaceName string = monitoring.outputs.logAnalyticsWorkspaceName
+output communicationEndpoint string = communication.outputs.communicationEndpoint
+output emailSenderAddress string = communication.outputs.senderAddress
 output backendFqdn string = deployContainerApps ? (containerApps.?outputs.?backendFqdn ?? '') : ''
 output frontendFqdn string = deployContainerApps ? (containerApps.?outputs.?frontendFqdn ?? '') : ''

@@ -102,8 +102,17 @@ function ComparisonCard({
   );
 }
 
-function MedicineAlternatives({ item, isApproved }: { item: MedicineEntity; isApproved: boolean }) {
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+function MedicineAlternatives({
+  item,
+  isApproved,
+  selected,
+  onSelect,
+}: {
+  item: MedicineEntity;
+  isApproved: boolean;
+  selected: string | null;
+  onSelect: (cheaperBrand: string) => void;
+}) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['medicine-alternatives', item.lineId, item.activeIngredient, item.strengthValue, item.dosageForm],
     queryFn: () => fetchAlternatives([item]),
@@ -145,8 +154,8 @@ function MedicineAlternatives({ item, isApproved }: { item: MedicineEntity; isAp
           savingsPct={alternative.savingsPct}
           isApproved={isApproved}
           source={alternative.source}
-          isSelected={selectedKey === alternative.cheaper}
-          onSelect={() => setSelectedKey(alternative.cheaper)}
+          isSelected={selected === alternative.cheaperBrand}
+          onSelect={() => onSelect(alternative.cheaperBrand)}
         />
       ))}
     </div>
@@ -156,6 +165,9 @@ function MedicineAlternatives({ item, isApproved }: { item: MedicineEntity; isAp
 export function ResultsStep({ runId, ocrConfidence, items, patientName, onStartOver }: ResultsStepProps) {
   const reviewQuery = useQuery({ queryKey: ['reviews', runId], queryFn: () => fetchReviewStatus(runId) });
   const isApproved = reviewQuery.data?.data.approved ?? false;
+  // `lineId -> cheaperBrand`; this is what the doctor is asked to rule on, so it lives here
+  // rather than inside each medicine card.
+  const [selections, setSelections] = useState<Record<string, string>>({});
 
   return (
     <div>
@@ -181,12 +193,23 @@ export function ResultsStep({ runId, ocrConfidence, items, patientName, onStartO
               {[item.frequency, item.duration].filter(Boolean).join(' \u00b7 ')}
             </p>
           )}
-          <MedicineAlternatives item={item} isApproved={isApproved} />
+          <MedicineAlternatives
+            item={item}
+            isApproved={isApproved}
+            selected={selections[item.lineId] ?? null}
+            onSelect={(cheaperBrand) =>
+              setSelections((current) => ({ ...current, [item.lineId]: cheaperBrand }))
+            }
+          />
         </Card>
       ))}
 
       <div className={styles.shareBlock}>
-        <DoctorReviewCard runId={runId} detectedPatientName={patientName} />
+        <DoctorReviewCard
+          runId={runId}
+          detectedPatientName={patientName}
+          selections={selections}
+        />
       </div>
     </div>
   );

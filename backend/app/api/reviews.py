@@ -12,7 +12,9 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import HTMLResponse
 
+from app.config import get_settings
 from app.deps import CurrentUser, get_current_user
+from app.errors import UnauthenticatedError, ValidationError
 from app.models.common import ApiResponse, SafetyBlock
 from app.models.review import (
     DoctorListResponse,
@@ -42,10 +44,15 @@ _DECISION_OPTIONS = (
 _DECISION_LABELS = {value: label for value, label, _ in _DECISION_OPTIONS}
 _DECISION_SYMBOLS = {value: symbol for value, _, symbol in _DECISION_OPTIONS}
 
-_DOCUMENT_COPY = {
-    "approved": "New Health IQ prescription (PDF)",
-    "followup": "Follow-up required (PDF)",
+# The buttons are imperative ("Approve"); a recorded verdict must read as already decided, and
+# must match what the summary PDF and the patient's app show for the same decision.
+_VERDICT_LABELS = {
+    "approved": "Approved",
+    "changes_requested": "Change requested",
+    "rejected": "Not approved",
 }
+
+_DOCUMENT_COPY = "Health IQ review summary (PDF)"
 
 
 def _envelope(request: Request, data):
@@ -81,7 +88,7 @@ async def request_review(
         run_id=body.run_id,
         doctor_ids=body.doctor_ids,
         medicines=doctor_pdf.medicine_names(run),
-        lines=doctor_pdf.medicine_lines(run),
+        lines=doctor_pdf.medicine_lines(run, body.selections),
         patient_name=body.patient_name or await patients.display_name(current_user.user_id),
         pdf_filename=filename,
         pdf_bytes=content,
@@ -113,44 +120,84 @@ def _pdf_response(filename: str, content: bytes) -> Response:
     )
 
 
+UNLOCK_COOKIE_NAME = "hiq_review_unlock"
+
+
+def _require_unlock(request: Request, token: str) -> None:
+    """Possession of the link is not authorisation; the emailed PIN is."""
+    if not reviews.is_unlocked(token, request.cookies.get(UNLOCK_COOKIE_NAME)):
+        raise UnauthenticatedError("Enter the PIN from your email to open this review")
+
+
 @router.get("/reviews/{token}/document")
-async def review_document(token: str) -> Response:
+async def review_document(token: str, request: Request) -> Response:
     """Serve the PDF behind the review token so the clinician can read it before deciding."""
+    _require_unlock(request, token)
     record = await reviews.get_review(token)
     run = await cosmos_repo.get_run(record["userId"], record["runId"])
     filename, content = doctor_pdf.build_for_run(run)
     return _pdf_response(filename, content)
 
 
-@router.get("/reviews/{token}/prescription/{kind}")
-async def review_outcome_document(token: str, kind: str) -> Response:
-    """The clinician's copy of what they just signed: `approved` plan or `followup` list."""
+@router.get("/reviews/{token}/prescription")
+async def review_outcome_document(token: str, request: Request) -> Response:
+    """The clinician's copy of what they just signed: every medicine, alternative and verdict."""
+    _require_unlock(request, token)
     record = await reviews.get_review(token)
-    return _pdf_response(*await _build_outcome(record, kind))
+    return _pdf_response(*await _build_outcome(record))
 
 
-@router.get("/reviews/{review_id}/documents/{kind}")
+@router.get("/reviews/{review_id}/documents")
 async def patient_outcome_document(
     review_id: str,
-    kind: str,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> Response:
     """The patient's copy of the same document, addressed by review id rather than the token."""
     record = await reviews.get_review_for_patient(current_user.user_id, review_id)
-    return _pdf_response(*await _build_outcome(record, kind))
+    return _pdf_response(*await _build_outcome(record))
 
 
-async def _build_outcome(record: dict, kind: str) -> tuple[str, bytes]:
+async def _build_outcome(record: dict) -> tuple[str, bytes]:
     run = await cosmos_repo.get_run(record["userId"], record["runId"])
     patient_name = record.get("patientName") or await patients.display_name(record["userId"])
-    return doctor_pdf.build_outcome_document(run, record, kind, patient_name)
+    return doctor_pdf.build_outcome_document(run, record, patient_name)
 
 
 @router.get("/reviews/{token}", response_class=HTMLResponse)
-async def review_page(token: str) -> HTMLResponse:
-    """Anonymous confirm page. Reading it records nothing."""
+async def review_page(token: str, request: Request) -> HTMLResponse:
+    """Anonymous confirm page. Reading it records nothing.
+
+    Until the emailed PIN is entered this shows only the PIN prompt - no patient name, no
+    medicines - so a leaked link discloses nothing.
+    """
     record = await reviews.get_review(token)
-    return HTMLResponse(_page(token, record))
+    if not reviews.is_unlocked(token, request.cookies.get(UNLOCK_COOKIE_NAME)):
+        return _html_response(_pin_page(token, record))
+    return _html_response(_page(token, record))
+
+
+@router.post("/reviews/{token}/unlock", response_class=HTMLResponse)
+async def unlock_review_page(token: str, request: Request) -> HTMLResponse:
+    """Exchange the emailed PIN for a short-lived cookie scoped to this one review."""
+    form = await request.form()
+    try:
+        record = await reviews.unlock_review(token, str(form.get("pin", "")))
+    except ValidationError as exc:
+        record = await reviews.get_review(token)
+        return _html_response(_pin_page(token, record, error=exc.detail))
+
+    value, max_age = reviews.issue_unlock_cookie(token)
+    response = _html_response(_page(token, record))
+    response.set_cookie(
+        UNLOCK_COOKIE_NAME,
+        value,
+        max_age=max_age,
+        httponly=True,
+        samesite="lax",
+        secure=get_settings().session_cookie_secure,
+        path=f"/api/v1/reviews/{token}",
+    )
+    return response
 
 
 @router.post("/reviews/{token}/decision", response_class=HTMLResponse)
@@ -160,6 +207,7 @@ async def submit_decision(token: str, request: Request) -> HTMLResponse:
     Field names are `decision-<lineId>`, one per medicine, so the clinician answers each line
     individually instead of accepting or rejecting the whole summary.
     """
+    _require_unlock(request, token)
     form = await request.form()
     decisions = {
         key[len("decision-") :]: str(value)
@@ -169,7 +217,14 @@ async def submit_decision(token: str, request: Request) -> HTMLResponse:
     record = await reviews.record_decision(
         token, decisions=decisions, notes=str(form.get("notes", ""))
     )
-    return HTMLResponse(_page(token, record))
+    return _html_response(_page(token, record))
+
+
+def _html_response(markup: str) -> HTMLResponse:
+    """Never cached: a clinician revisiting the link must see the decision state as it is now."""
+    return HTMLResponse(
+        markup, headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+    )
 
 
 def _named(name: str, maker: str) -> str:
@@ -236,18 +291,13 @@ def _decide_form(token: str, lines: list[dict]) -> str:
 
 
 def _outcome_links(token: str, record: dict) -> str:
-    kinds = {entry["decision"] for entry in record.get("decisions", [])}
-    available = [
-        kind
-        for kind, decisions in (("approved", {"approved"}), ("followup", {"changes_requested", "rejected"}))
-        if kinds & decisions
-    ]
-    links = "".join(
-        f'<a class="doc" href="/api/v1/reviews/{html.escape(token)}/prescription/{kind}" '
-        f'target="_blank" rel="noopener">{_DOCUMENT_COPY[kind]}</a> '
-        for kind in available
+    if not record.get("decisions"):
+        return ""
+    link = (
+        f'<a class="doc" href="/api/v1/reviews/{html.escape(token)}/prescription" '
+        f'target="_blank" rel="noopener">{_DOCUMENT_COPY}</a>'
     )
-    return f"<p><strong>Documents generated for the patient:</strong></p><p>{links}</p>" if links else ""
+    return f"<p><strong>Document generated for the patient:</strong></p><p>{link}</p>"
 
 
 def _decided_summary(record: dict) -> str:
@@ -255,7 +305,7 @@ def _decided_summary(record: dict) -> str:
     rows = ""
     for entry in record.get("decisions", []):
         decision = entry["decision"]
-        label = _DECISION_LABELS.get(decision, decision)
+        label = _VERDICT_LABELS.get(decision, decision)
         proposal = proposals.get(entry["lineId"], {})
         rows += (
             f'<tr><td class="medName">{_named(entry["label"], proposal.get("maker", ""))}</td>'
@@ -301,6 +351,31 @@ def _page(token: str, record: dict) -> str:
             f"{_outcome_links(token, record)}"
         )
 
+    return _shell(label, ink, wash, doctor, body)
+
+
+def _pin_page(token: str, record: dict, error: str = "") -> str:
+    """Shown until the emailed PIN is entered. Deliberately carries no patient or medicine data."""
+    doctor = html.escape(record["doctorName"])
+    banner = (
+        f'<p class="pinError">{html.escape(error)}</p>' if error else ""
+    )
+    body = (
+        '<p class="who">This review is protected. Enter the 6-digit PIN from the Health IQ '
+        "email sent to your inbox.</p>"
+        f"{banner}"
+        f'<form method="post" action="/api/v1/reviews/{html.escape(token)}/unlock">'
+        '<label for="pin">Verification PIN</label>'
+        '<input id="pin" name="pin" inputmode="numeric" autocomplete="one-time-code" '
+        'pattern="[0-9]{6}" maxlength="6" required autofocus class="pinInput">'
+        '<div class="row"><button class="primary" type="submit">Open the review</button></div>'
+        '<p class="fine">The PIN is in the same email as this link. Without it nothing about the '
+        "patient is shown.</p></form>"
+    )
+    return _shell("PIN required", "#1d4ed8", "#dbeafe", doctor, body)
+
+
+def _shell(label: str, ink: str, wash: str, doctor: str, body: str) -> str:
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -364,6 +439,10 @@ def _page(token: str, record: dict) -> str:
         font:inherit; font-weight:600; cursor:pointer; }}
  button.primary {{ background:#16a34a; border-color:#16a34a; color:#fff; }}
  .fine, footer {{ color:#64748b; font-size:.85rem; }}
+ .pinInput {{ font-size:1.6rem; letter-spacing:.5rem; width:9ch; padding:10px 12px;
+        border:1px solid #cbd5e1; border-radius:8px; font-family:inherit; }}
+ .pinError {{ background:#fee2e2; color:#b91c1c; border-radius:8px; padding:10px 14px;
+        font-size:.9rem; font-weight:600; }}
  .done {{ font-weight:600; }}
  blockquote {{ border-left:3px solid #cbd5e1; margin:12px 0; padding-left:12px; color:#334155; }}
  footer {{ margin-top:26px; border-top:1px solid #e2e8f0; padding-top:14px; }}

@@ -22,6 +22,7 @@ from app.models.medical_document import MedicalDocument
 from app.models.patient_profile import PatientProfile
 from app.models.profile import CONSENT_PURPOSES, Consent, Profile
 from app.models.report import StoredReport
+from app.models.review import IssuedPrescription
 
 _DEMO_RUNS_STORE: dict[str, dict] = {}
 _DEMO_SAVED_REPORTS: dict[str, StoredReport] = {}
@@ -339,6 +340,7 @@ PATIENT_PROFILE_ID_PREFIX = "pp-"
 
 _DEMO_PATIENT_PROFILES: dict[str, dict] = {}
 _DEMO_DOCUMENTS: dict[str, dict] = {}
+_DEMO_PRESCRIPTIONS: dict[str, dict] = {}
 _DEMO_AUDIT: list[dict] = []
 _DEMO_CONSENTS: list[dict] = []
 
@@ -493,6 +495,62 @@ async def delete_document(account_id: str, document_id: str) -> None:
     await _container("documents").delete_item(item=document_id, partition_key=account_id)
 
 
+async def save_prescription(prescription: IssuedPrescription) -> IssuedPrescription:
+    """Persist one issued Health IQ prescription as the profile's permanent history."""
+    document = json.loads(prescription.model_dump_json(by_alias=True))
+    if _use_demo_store():
+        _DEMO_PRESCRIPTIONS[prescription.id] = document
+        return prescription
+    await _container("prescriptions").upsert_item(document)
+    return prescription
+
+
+async def list_prescriptions(account_id: str, profile_id: str) -> list[IssuedPrescription]:
+    """Issued prescriptions for one patient profile, newest first."""
+    if _use_demo_store():
+        documents = [
+            document
+            for document in _DEMO_PRESCRIPTIONS.values()
+            if document["accountId"] == account_id and document["profileId"] == profile_id
+        ]
+    else:
+        query = "SELECT * FROM c WHERE c.accountId = @accountId AND c.profileId = @profileId"
+        results = _container("prescriptions").query_items(
+            query=query,
+            parameters=[
+                {"name": "@accountId", "value": account_id},
+                {"name": "@profileId", "value": profile_id},
+            ],
+            partition_key=account_id,
+        )
+        documents = [document async for document in results]
+
+    models = [IssuedPrescription.model_validate(document) for document in documents]
+    return sorted(models, key=lambda item: item.issued_at, reverse=True)
+
+
+async def get_prescription(
+    account_id: str, profile_id: str, prescription_id: str
+) -> IssuedPrescription | None:
+    """One issued prescription, scoped to the account *and* the profile it belongs to."""
+    if _use_demo_store():
+        document = _DEMO_PRESCRIPTIONS.get(prescription_id)
+    else:
+        try:
+            document = await _container("prescriptions").read_item(
+                item=prescription_id, partition_key=account_id
+            )
+        except Exception:  # noqa: BLE001 - SDK raises a generic CosmosResourceNotFoundError
+            document = None
+
+    if document is None:
+        return None
+    # Scoping on both keys keeps one family member's prescription out of another's history.
+    if document.get("accountId") != account_id or document.get("profileId") != profile_id:
+        return None
+    return IssuedPrescription.model_validate(document)
+
+
 async def record_audit_event(event: AuditEvent) -> None:
     """Append one audit event. Callers must pass structural facts only, never medical content."""
     document = json.loads(event.model_dump_json(by_alias=True))
@@ -587,5 +645,6 @@ def reset_demo_state() -> None:
     """
     _DEMO_PATIENT_PROFILES.clear()
     _DEMO_DOCUMENTS.clear()
+    _DEMO_PRESCRIPTIONS.clear()
     _DEMO_AUDIT.clear()
     _DEMO_CONSENTS.clear()

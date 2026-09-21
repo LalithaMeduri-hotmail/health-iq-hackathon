@@ -39,20 +39,19 @@ _DECISION_LABELS = {
     "rejected": "Not approved",
 }
 
-_PRESCRIPTION_COPY: dict[str, tuple[str, str, str]] = {
-    "approved": (
-        "Health IQ Prescription",
-        "Issued from a clinician's review of the patient's own prescription",
-        "Note: Take as directed. Where a row replaces another brand, that switch was approved by "
-        "the clinician below. This does not replace your original prescription.",
-    ),
-    "followup": (
-        "Health IQ Follow-up Required",
-        "Medicines the reviewing clinician did not approve as read",
-        "Note: Do not change how you take these on your own. Book a follow-up with the clinician "
-        "below before acting on anything listed here.",
-    ),
+_DECISION_INK = {
+    "approved": "#166534",
+    "changes_requested": "#b45309",
+    "rejected": "#b91c1c",
 }
+
+_PRESCRIPTION_TITLE = "Health IQ Review Summary"
+_PRESCRIPTION_SUBTITLE = "A clinician's decision on the patient's own prescription"
+_PRESCRIPTION_GUIDANCE = (
+    "Note: Take medicines as directed. Only rows marked Approved may be switched to the Health IQ "
+    "alternative; anything else stays as originally prescribed until the clinician below says "
+    "otherwise. This does not replace your original prescription."
+)
 
 
 def build(analysis: MedicineAnalysis, alternatives: list[dict] | None = None) -> bytes:
@@ -200,11 +199,11 @@ def _table(rows: list[list], colors, mm, Table, TableStyle, widths: list[float] 
 
 
 def build_prescription(document_model: PrescriptionDocument) -> bytes:
-    """Render the Health IQ outcome document for one decided review.
+    """Render the single Health IQ review summary for one decided review.
 
-    Laid out like the paper prescription a patient already recognises: the Rx mark and the
-    prescriber's block at the top, patient and reference details under a rule, then numbered
-    medicines with the dosing beside each one and the clinician's sign-off at the foot.
+    Laid out like the paper prescription a patient already recognises: the prescriber's block at
+    the top, patient and reference details under a rule, then one row per medicine carrying the
+    proposed alternative and the verdict side by side, and the clinician's sign-off at the foot.
     """
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_RIGHT
@@ -221,7 +220,7 @@ def build_prescription(document_model: PrescriptionDocument) -> bytes:
         TableStyle,
     )
 
-    title, subtitle, guidance = _PRESCRIPTION_COPY[document_model.kind]
+    title, subtitle, guidance = _PRESCRIPTION_TITLE, _PRESCRIPTION_SUBTITLE, _PRESCRIPTION_GUIDANCE
     ink = colors.HexColor("#0b1220")
     muted = colors.HexColor("#64748b")
 
@@ -365,11 +364,12 @@ def _brandmark(Image, Paragraph, Table, TableStyle, mm, wordmark):  # noqa: N803
 def _medicines_table(  # noqa: N803 - ReportLab symbols are passed in by the caller
     document_model: PrescriptionDocument, colors, mm, Table, TableStyle, Paragraph, med, dose, fine
 ):
-    """Numbered medicines on the left, dosing beside each, mirroring a printed prescription."""
+    """One row per medicine: what was prescribed, the Health IQ equivalent, and the verdict."""
     rows: list[list] = [
         [
             "",
-            Paragraph("<b>Medicines</b>", med),
+            Paragraph("<b>Current medicine</b>", med),
+            Paragraph("<b>Health IQ alternative</b>", med),
             Paragraph("<b>Directions</b>", med),
             Paragraph("<b>Decision</b>", med),
         ]
@@ -384,24 +384,28 @@ def _medicines_table(  # noqa: N803 - ReportLab symbols are passed in by the cal
         rows.append(
             [
                 Paragraph(f"{index}.", med),
-                Paragraph(
-                    f"<b>{_escape(line.label)}</b>{maker}{detail}"
-                    f'<br/><font size="7" color="#64748b">{_escape(line.note)}</font>',
-                    med,
-                ),
+                Paragraph(f"<b>{_escape(line.label)}</b>{maker}{detail}", med),
+                Paragraph(_alternative_cell(line), dose),
                 Paragraph(
                     f"{_escape(line.frequency)}<br/>"
                     f'<font color="#64748b">{_escape(line.duration)}</font>',
                     dose,
                 ),
                 Paragraph(
-                    f'<font color="#64748b">{_escape(_DECISION_LABELS.get(line.decision, line.decision))}</font>',
+                    f'<b><font color="{_DECISION_INK.get(line.decision, "#64748b")}">'
+                    f'{_escape(_DECISION_LABELS.get(line.decision, line.decision))}</font></b>'
+                    f'<br/><font size="7" color="#64748b">{_escape(line.note)}</font>',
                     dose,
                 ),
             ]
         )
 
-    table = Table(rows, colWidths=[7 * mm, 97 * mm, 40 * mm, 30 * mm], repeatRows=1, hAlign="LEFT")
+    table = Table(
+        rows,
+        colWidths=[7 * mm, 54 * mm, 54 * mm, 27 * mm, 32 * mm],
+        repeatRows=1,
+        hAlign="LEFT",
+    )
     table.setStyle(
         TableStyle(
             [
@@ -415,6 +419,32 @@ def _medicines_table(  # noqa: N803 - ReportLab symbols are passed in by the cal
         )
     )
     return table
+
+
+def _alternative_cell(line) -> str:
+    """The equivalent the clinician was asked about, priced so the saving is auditable."""
+    if not line.alternative:
+        return '<font color="#64748b">No equivalent found - confirmed as prescribed</font>'
+
+    maker = (
+        f' <font color="#64748b">({_escape(line.alternative_maker)})</font>'
+        if line.alternative_maker
+        else ""
+    )
+    generic = (
+        f'<br/><font size="7.5" color="#64748b">{_escape(line.alternative_generic)}</font>'
+        if line.alternative_generic
+        else ""
+    )
+    price = ""
+    if line.original_mrp_inr and line.cheaper_mrp_inr:
+        saving = f" &middot; about {line.savings_pct}% less" if line.savings_pct else ""
+        # Prices stay in "Rs" rather than the rupee sign: the base PDF fonts have no glyph for it.
+        price = (
+            f'<br/><font size="7.5" color="#64748b">Rs {line.original_mrp_inr:.2f} &rarr; '
+            f"Rs {line.cheaper_mrp_inr:.2f}{saving}</font>"
+        )
+    return f"<b>{_escape(line.alternative)}</b>{maker}{generic}{price}"
 
 
 def _escape(value: str) -> str:

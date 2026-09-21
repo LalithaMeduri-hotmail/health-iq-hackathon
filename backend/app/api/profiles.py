@@ -8,9 +8,10 @@ taken from the validated session, so a forged `accountId` in a body has no effec
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 
 from app.deps import CurrentUser, get_current_user
+from app.errors import NotFoundError
 from app.models.audit import AuditAction
 from app.models.common import ApiResponse, SafetyBlock
 from app.models.patient_profile import (
@@ -21,7 +22,9 @@ from app.models.patient_profile import (
     ProfileHistoryResponse,
     ProfileSummary,
 )
-from app.services import audit, patient_profiles
+from app.models.review import IssuedPrescription, IssuedPrescriptionListResponse
+from app.repositories import cosmos_repo
+from app.services import audit, doctor_pdf, patient_profiles
 from app.services.profile_authorization import authorize_profile
 
 router = APIRouter(prefix="/api/v1/profiles", tags=["profiles"])
@@ -203,6 +206,75 @@ async def profile_history(
     )
     timeline = await patient_profiles.history(profile, owner_profile_id=owner.id)
     return _envelope(request, timeline)
+
+
+@router.get("/{profile_id}/prescriptions")
+async def list_issued_prescriptions(
+    request: Request,
+    profile_id: str,
+    current_user: CurrentUser = Depends(get_current_user),  # noqa: B008
+) -> ApiResponse[IssuedPrescriptionListResponse]:
+    """Health IQ prescriptions issued for this profile after a clinician decided, newest first."""
+    profile = await authorize_profile(
+        current_user.user_id,
+        profile_id,
+        require_active=False,
+        correlation_id=_correlation_id(request),
+    )
+    issued = await cosmos_repo.list_prescriptions(current_user.user_id, profile.id)
+    return _envelope(
+        request, IssuedPrescriptionListResponse(profileId=profile.id, prescriptions=issued)
+    )
+
+
+@router.get("/{profile_id}/prescriptions/{prescription_id}")
+async def get_issued_prescription(
+    request: Request,
+    profile_id: str,
+    prescription_id: str,
+    current_user: CurrentUser = Depends(get_current_user),  # noqa: B008
+) -> ApiResponse[IssuedPrescription]:
+    """One issued prescription exactly as approved: medicines, alternatives, verdicts, prices."""
+    profile = await authorize_profile(
+        current_user.user_id,
+        profile_id,
+        require_active=False,
+        correlation_id=_correlation_id(request),
+    )
+    issued = await cosmos_repo.get_prescription(current_user.user_id, profile.id, prescription_id)
+    if issued is None:
+        raise NotFoundError("No such prescription for this profile")
+    return _envelope(request, issued)
+
+
+@router.get("/{profile_id}/prescriptions/{prescription_id}/document")
+async def get_issued_prescription_pdf(
+    request: Request,
+    profile_id: str,
+    prescription_id: str,
+    current_user: CurrentUser = Depends(get_current_user),  # noqa: B008
+) -> Response:
+    """Re-render the stored prescription. Replayed from the snapshot, never recomputed."""
+    profile = await authorize_profile(
+        current_user.user_id,
+        profile_id,
+        require_active=False,
+        correlation_id=_correlation_id(request),
+    )
+    issued = await cosmos_repo.get_prescription(current_user.user_id, profile.id, prescription_id)
+    if issued is None:
+        raise NotFoundError("No such prescription for this profile")
+
+    filename, content = doctor_pdf.render_document(issued.document, issued.issued_at[:10])
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.post("/{profile_id}/activate")

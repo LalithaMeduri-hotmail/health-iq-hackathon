@@ -10,9 +10,6 @@ from pydantic import BaseModel, ConfigDict, Field
 ReviewDecision = Literal["approved", "changes_requested", "rejected"]
 ReviewState = Literal["pending", "approved", "changes_requested", "rejected", "expired"]
 
-# Which of the two outcome documents a decided review produces.
-PrescriptionKind = Literal["approved", "followup"]
-
 
 class RegisteredDoctor(BaseModel):
     """One clinician from the curated Health IQ registry (`data/doctors/registered_doctors.csv`)."""
@@ -40,16 +37,25 @@ class ReviewRequestBody(BaseModel):
     doctor_ids: list[str] = Field(alias="doctorIds", min_length=1)
     # As printed on the patient's own prescription; it names the document the clinician signs.
     patient_name: str | None = Field(alias="patientName", default=None, max_length=80)
+    # `lineId -> cheaperBrand` the patient picked. An unlisted line falls back to the best-value
+    # match, so the clinician is never asked about a switch nobody chose.
+    selections: dict[str, str] = Field(default_factory=dict)
 
 
 class MedicineVerdict(BaseModel):
-    """The clinician's verdict on one medicine line; every line gets its own."""
+    """The clinician's verdict on one medicine line, with the switch it was a verdict about."""
 
     model_config = ConfigDict(populate_by_name=True)
 
     line_id: str = Field(alias="lineId")
     label: str
     decision: ReviewDecision
+    maker: str = ""
+    alternative: str = ""
+    alternative_maker: str = Field(alias="alternativeMaker", default="")
+    savings_pct: int = Field(alias="savingsPct", default=0)
+    original_mrp_inr: float = Field(alias="originalMrpInr", default=0.0)
+    cheaper_mrp_inr: float = Field(alias="cheaperMrpInr", default=0.0)
 
 
 class ReviewSummary(BaseModel):
@@ -90,7 +96,8 @@ class ReviewDecisionBody(BaseModel):
 
 
 class PrescriptionLine(BaseModel):
-    """One medicine row of a Health IQ outcome document."""
+    """One medicine row of the Health IQ review summary: what was prescribed, what Health IQ
+    proposed instead, and the clinician's verdict on that switch."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -103,14 +110,19 @@ class PrescriptionLine(BaseModel):
     duration: str = "-"
     decision: ReviewDecision
     note: str = "-"
+    alternative: str = ""
+    alternative_maker: str = Field(alias="alternativeMaker", default="")
+    alternative_generic: str = Field(alias="alternativeGeneric", default="")
+    savings_pct: int = Field(alias="savingsPct", default=0)
+    original_mrp_inr: float = Field(alias="originalMrpInr", default=0.0)
+    cheaper_mrp_inr: float = Field(alias="cheaperMrpInr", default=0.0)
 
 
 class PrescriptionDocument(BaseModel):
-    """Everything the Health IQ prescription/follow-up PDF renders. Built after a doctor decides."""
+    """Everything the single Health IQ review-summary PDF renders. Built after a doctor decides."""
 
     model_config = ConfigDict(populate_by_name=True)
 
-    kind: PrescriptionKind
     patient_name: str = Field(alias="patientName")
     doctor_name: str = Field(alias="doctorName")
     doctor_specialty: str = Field(alias="doctorSpecialty")
@@ -119,3 +131,32 @@ class PrescriptionDocument(BaseModel):
     reference: str
     notes: str = ""
     lines: list[PrescriptionLine]
+
+
+class IssuedPrescription(BaseModel):
+    """A Health IQ prescription as issued, kept as the patient profile's permanent history.
+
+    This is a point-in-time snapshot, not a view over live data: brand prices and the medicine
+    catalog move, so a recheck has to show what the clinician actually approved rather than what
+    the same query would return today.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    account_id: str = Field(alias="accountId")
+    profile_id: str = Field(alias="profileId")
+    run_id: str = Field(alias="runId")
+    review_id: str = Field(alias="reviewId")
+    status: ReviewState
+    issued_at: str = Field(alias="issuedAt")
+    document: PrescriptionDocument
+
+
+class IssuedPrescriptionListResponse(BaseModel):
+    """`GET /api/v1/profiles/{profileId}/prescriptions` response `data`."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    profile_id: str = Field(alias="profileId")
+    prescriptions: list[IssuedPrescription] = Field(default_factory=list)
