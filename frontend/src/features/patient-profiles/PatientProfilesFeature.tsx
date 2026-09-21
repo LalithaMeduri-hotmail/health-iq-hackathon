@@ -32,6 +32,7 @@ import {
 } from './api';
 import { ProfileForm } from './ProfileForm';
 import type { ProfileFormValues } from './ProfileForm';
+import { PrescriptionHistory } from './PrescriptionHistory';
 import { initials, relationshipLabel } from './ProfileSelector';
 import styles from './patientProfiles.module.css';
 import type { PatientProfile } from './types';
@@ -181,6 +182,8 @@ export function PatientProfilesFeature() {
     restore.isPending ||
     consent.isPending;
 
+  const activeProfile = profiles.find((profile) => profile.id === activeProfileId) ?? null;
+
   if (isLoading) {
     return <LoadingState message="Loading patient profiles..." />;
   }
@@ -250,6 +253,23 @@ export function PatientProfilesFeature() {
             />
           ))}
         </div>
+      )}
+
+      {activeProfile && (
+        <section className={styles.rxSection} aria-labelledby="issued-prescriptions">
+          <p className={styles.rxSectionEyebrow}>History</p>
+          <h2 className={styles.rxSectionTitle} id="issued-prescriptions">
+            Health IQ prescriptions
+          </h2>
+          <p className={styles.rxSectionDesc}>
+            Prescriptions issued for {activeProfile.displayName} after a doctor reviewed them. Each
+            one is kept exactly as approved, including the prices at the time.
+          </p>
+          <PrescriptionHistory
+            profileId={activeProfile.id}
+            profileName={activeProfile.displayName}
+          />
+        </section>
       )}
 
       {isCreating && (

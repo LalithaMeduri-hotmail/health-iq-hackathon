@@ -131,3 +131,32 @@ class PrescriptionDocument(BaseModel):
     reference: str
     notes: str = ""
     lines: list[PrescriptionLine]
+
+
+class IssuedPrescription(BaseModel):
+    """A Health IQ prescription as issued, kept as the patient profile's permanent history.
+
+    This is a point-in-time snapshot, not a view over live data: brand prices and the medicine
+    catalog move, so a recheck has to show what the clinician actually approved rather than what
+    the same query would return today.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    account_id: str = Field(alias="accountId")
+    profile_id: str = Field(alias="profileId")
+    run_id: str = Field(alias="runId")
+    review_id: str = Field(alias="reviewId")
+    status: ReviewState
+    issued_at: str = Field(alias="issuedAt")
+    document: PrescriptionDocument
+
+
+class IssuedPrescriptionListResponse(BaseModel):
+    """`GET /api/v1/profiles/{profileId}/prescriptions` response `data`."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    profile_id: str = Field(alias="profileId")
+    prescriptions: list[IssuedPrescription] = Field(default_factory=list)

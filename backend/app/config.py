@@ -44,14 +44,17 @@ class Settings(BaseSettings):
     # Public origin the doctor's emailed approval link points back at.
     public_api_base_url: str = "http://localhost:8000"
 
-    # An unset `smtp_host` keeps the mailer in preview mode: messages land in `.local-mail/`.
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_username: str = ""
-    smtp_password: str = ""
-    smtp_from: str = "HealthIQ <no-reply@healthiq.invalid>"
-    smtp_use_tls: bool = True
+    # Outbound mail: Azure Communication Services Email, authenticated with
+    # `DefaultAzureCredential` so no mailbox password is ever stored. Unset keeps the mailer in
+    # preview mode, writing messages to `.local-mail/` instead of sending them.
+    azure_communication_endpoint: str = ""
+    acs_sender_address: str = ""
+    # The one name every recipient sees. Kept here so the sender identity cannot drift per send;
+    # the matching ACS display name is declared in infra/modules/communication.bicep.
+    mail_sender_name: str = "Health IQ"
     review_link_ttl_hours: int = 168
+    # How long one PIN entry keeps the clinician's browser unlocked for that review.
+    review_unlock_minutes: int = 60
     # Account module (username/mobile/email + PIN login). `jwt_secret` MUST be set via Key
     # Vault/env in any non-local deployment - see services/security.py for the dev-only fallback.
     jwt_secret: str = ""

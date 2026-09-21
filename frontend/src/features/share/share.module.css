@@ -192,6 +192,16 @@
   color: var(--color-ink-700);
 }
 
+.deliveryFailed {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
 .verdictTableWrap {
   margin: var(--space-3) 0 0;
   overflow-x: auto;
@@ -227,7 +237,8 @@
   border-bottom: none;
 }
 
-.verdictTable td:last-child {
+.verdictTable td:last-child,
+.verdictTable th:last-child {
   text-align: right;
   white-space: nowrap;
 }

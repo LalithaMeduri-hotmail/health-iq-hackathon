@@ -25,6 +25,7 @@ dependencies = [
   "pypdf>=6.16.2",
   "bcrypt>=4.1",
   "pyjwt>=2.9",
+  "azure-communication-email>=1.0",
 ]
 
 [project.optional-dependencies]

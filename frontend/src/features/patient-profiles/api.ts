@@ -4,10 +4,11 @@
  * implicitly scoped to whichever profile happened to be active when the module loaded.
  */
 
-import { ApiError, apiClient } from '@/lib/apiClient';
+import { ApiError, absoluteApiUrl, apiClient } from '@/lib/apiClient';
 import type { ApiResponse } from '@/lib/types';
 
 import type {
+  IssuedPrescriptionListResponse,
   PatientProfile,
   PatientProfileCreateInput,
   PatientProfileInput,
@@ -57,6 +58,19 @@ export function grantConsent(profileId: string): Promise<ApiResponse<PatientProf
 
 export function activateProfile(profileId: string): Promise<ApiResponse<PatientProfile>> {
   return apiClient.post<PatientProfile>(profilePath(profileId, '/activate'));
+}
+
+export function fetchIssuedPrescriptions(
+  profileId: string,
+): Promise<ApiResponse<IssuedPrescriptionListResponse>> {
+  return apiClient.get<IssuedPrescriptionListResponse>(profilePath(profileId, '/prescriptions'));
+}
+
+/** Direct link to the stored PDF; served by the API, so it is a navigation, not a fetch. */
+export function issuedPrescriptionPdfUrl(profileId: string, prescriptionId: string): string {
+  return absoluteApiUrl(
+    `${profilePath(profileId, '/prescriptions')}/${encodeURIComponent(prescriptionId)}/document`,
+  );
 }
 
 export { ApiError };

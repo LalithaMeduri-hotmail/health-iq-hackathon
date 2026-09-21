@@ -249,3 +249,128 @@
   color: var(--color-danger);
   font-size: var(--font-size-sm);
 }
+
+/* ------------------------------------------------- issued Health IQ prescriptions (history) */
+.rxSection {
+  margin-top: var(--space-6);
+}
+
+.rxSectionEyebrow {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-brand-700);
+}
+
+.rxSectionTitle {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-xl);
+  color: var(--color-ink-900);
+}
+
+.rxSectionDesc {
+  margin: var(--space-1) 0 var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.rxList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.rxHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.rxDoctor {
+  display: block;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-ink-900);
+}
+
+.rxName {
+  display: block;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-ink-900);
+}
+
+.rxMeta {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.rxTableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 8px);
+}
+
+.rxTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.rxTable th {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.rxTable td {
+  padding: var(--space-2) var(--space-3);
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.rxTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.rxTable td:last-child,
+.rxTable th:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.rxNotes {
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--color-ink-300);
+  font-size: var(--font-size-sm);
+  color: var(--color-ink-700);
+}
+
+.rxActions {
+  margin: var(--space-3) 0 0;
+}
+
+.rxLink {
+  display: inline-block;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--color-brand-600);
+  color: var(--color-brand-700);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+}
+
+.rxLink:hover {
+  background: var(--color-brand-100);
+}

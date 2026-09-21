@@ -41,18 +41,29 @@ interface DoctorReviewCardProps {
 
 function ReviewRow({ review }: { review: ReviewSummary }) {
   const status = STATUS_COPY[review.status] ?? STATUS_COPY.pending;
+  // A failed send would otherwise sit on "Waiting for the doctor" forever, so the patient must
+  // be told the request never arrived rather than waiting on an email that does not exist.
+  const undelivered = review.delivery === 'failed';
   return (
     <li className={styles.reviewRow}>
       <div className={styles.reviewHead}>
         <span className={styles.doctorName}>
           {review.doctorName} <span className={styles.specialty}>{review.doctorSpecialty}</span>
         </span>
-        <Badge tone={status.tone}>{status.label}</Badge>
+        <Badge tone={undelivered ? 'danger' : status.tone}>
+          {undelivered ? 'Not delivered' : status.label}
+        </Badge>
       </div>
       <p className={styles.reviewMeta}>
-        Sent to {review.doctorEmailMasked}
-        {review.decidedAt ? ` · answered ${new Date(review.decidedAt).toLocaleString()}` : ''}
+        {undelivered ? 'Could not send to' : 'Sent to'} {review.doctorEmailMasked}
+        {review.decidedAt ? ` \u00b7 answered ${new Date(review.decidedAt).toLocaleString()}` : ''}
       </p>
+      {undelivered && (
+        <p className={styles.deliveryFailed}>
+          The email could not be delivered, so this doctor has not seen the request. Try sending it
+          again.
+        </p>
+      )}
 
       {review.decisions.length > 0 && (
         <div className={styles.verdictTableWrap}>

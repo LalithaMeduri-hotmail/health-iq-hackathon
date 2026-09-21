@@ -1,12 +1,11 @@
 """Outbound mail for doctor-review requests.
 
-Transport-agnostic by design: with `smtp_host` set the message goes out over SMTP+STARTTLS;
-without it the mailer stays in preview mode and writes the full RFC-822 message to
-`<repo>/.local-mail/*.eml` so the flow stays exercisable with no credentials. Credentials are
-read from settings only - never logged, never returned to a caller.
+One transport: Azure Communication Services Email, authenticated with `DefaultAzureCredential`
+so no mailbox password exists to leak. With `azure_communication_endpoint` unset the mailer stays
+in preview mode and writes the full RFC-822 message to `<repo>/.local-mail/*.eml`, so the flow is
+exercisable with no credentials at all.
 """
 
-import asyncio
 import logging
 import re
 import uuid
@@ -24,51 +23,110 @@ _ADDRESS_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 
 
 def is_preview_mode() -> bool:
-    """True when no SMTP host is configured, so nothing is actually delivered."""
-    return not get_settings().smtp_host
+    """True when no transport is configured, so nothing is actually delivered."""
+    return not get_settings().azure_communication_endpoint
 
 
-def _build(to_address: str, subject: str, text_body: str, attachment: tuple[str, bytes] | None) -> EmailMessage:
-    if not _ADDRESS_RE.match(to_address):
-        raise UpstreamUnavailableError("Recipient address is not a valid email address")
-
+def sender() -> str:
+    """The single From identity, identical on every message Health IQ sends."""
     settings = get_settings()
+    address = settings.acs_sender_address or "no-reply@healthiq.invalid"
+    return f"{settings.mail_sender_name} <{address}>"
+
+
+def _write_preview(
+    to_address: str,
+    subject: str,
+    text_body: str,
+    html_body: str | None,
+    attachment: tuple[str, bytes] | None,
+) -> str:
     message = EmailMessage()
-    message["From"] = settings.smtp_from
+    message["From"] = sender()
     message["To"] = to_address
     # Header injection defence: strip anything that could start a new header line.
     message["Subject"] = subject.replace("\r", " ").replace("\n", " ")
     message["Date"] = datetime.now(UTC).strftime("%a, %d %b %Y %H:%M:%S +0000")
     message.set_content(text_body)
-
+    # The text part stays first so clients that refuse HTML still show the approval URL.
+    if html_body:
+        message.add_alternative(html_body, subtype="html")
     if attachment is not None:
         filename, content = attachment
         message.add_attachment(content, maintype="application", subtype="pdf", filename=filename)
-    return message
+
+    _LOCAL_MAIL_ROOT.mkdir(parents=True, exist_ok=True)
+    target = _LOCAL_MAIL_ROOT / f"{datetime.now(UTC):%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:8]}.eml"
+    target.write_bytes(bytes(message))
+    return "preview"
 
 
-def _deliver(message: EmailMessage) -> str:
+async def _deliver_acs(
+    to_address: str,
+    subject: str,
+    text_body: str,
+    html_body: str | None,
+    attachment: tuple[str, bytes] | None,
+) -> str:
+    """Send through Azure Communication Services Email using the ambient Entra identity."""
+    import base64
+
+    from azure.communication.email.aio import EmailClient
+
+    from app.deps import get_azure_credential
+
     settings = get_settings()
+    message: dict = {
+        "senderAddress": settings.acs_sender_address,
+        "recipients": {"to": [{"address": to_address}]},
+        "content": {
+            "subject": subject.replace("\r", " ").replace("\n", " "),
+            "plainText": text_body,
+        },
+    }
+    if html_body:
+        message["content"]["html"] = html_body
+    if attachment is not None:
+        filename, content = attachment
+        message["attachments"] = [
+            {
+                "name": filename,
+                "contentType": "application/pdf",
+                "contentInBase64": base64.b64encode(content).decode("ascii"),
+            }
+        ]
 
-    if not settings.smtp_host:
-        _LOCAL_MAIL_ROOT.mkdir(parents=True, exist_ok=True)
-        target = _LOCAL_MAIL_ROOT / f"{datetime.now(UTC):%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:8]}.eml"
-        target.write_bytes(bytes(message))
-        return "preview"
+    client = EmailClient(settings.azure_communication_endpoint, get_azure_credential())
+    try:
+        async with client:
+            result = await _send_with_retry(client, message)
+    except Exception as exc:  # noqa: BLE001 - the SDK raises a wide range of transport errors
+        raise UpstreamUnavailableError(
+            f"Could not send the review email through Communication Services: {type(exc).__name__}"
+        ) from exc
 
-    import smtplib
+    status = (result or {}).get("status", "")
+    if status and status.lower() not in {"succeeded", "running"}:
+        raise UpstreamUnavailableError(f"Communication Services returned status {status!r}")
+    return "sent"
+
+
+async def _send_with_retry(client, message: dict):
+    """One retry on auth failure, covering the poll as well as the initial request.
+
+    `DefaultAzureCredential` shells out to `az` for local dev, which intermittently fails to
+    launch on a loaded machine. The token is re-fetched while polling too, so retrying only
+    `begin_send` would still leave a window open. The second attempt hits the warmed token cache.
+    """
+    from azure.core.exceptions import ClientAuthenticationError
 
     try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
-            if settings.smtp_use_tls:
-                smtp.starttls()
-            if settings.smtp_username:
-                smtp.login(settings.smtp_username, settings.smtp_password)
-            smtp.send_message(message)
-    except smtplib.SMTPException as exc:
-        # `exc` can echo the envelope; keep the recipient out of the surfaced detail.
-        raise UpstreamUnavailableError(f"Could not send the review email: {type(exc).__name__}") from exc
-    return "sent"
+        poller = await client.begin_send(message)
+        return await poller.result()
+    except ClientAuthenticationError:
+        logger.warning("credential acquisition failed for the email send; retrying once")
+        poller = await client.begin_send(message)
+        return await poller.result()
 
 
 async def send(
@@ -77,9 +135,16 @@ async def send(
     text_body: str,
     *,
     attachment: tuple[str, bytes] | None = None,
+    html_body: str | None = None,
 ) -> str:
     """Send one message. Returns `"sent"` or `"preview"`; never raises for an unknown mailbox."""
-    message = _build(to_address, subject, text_body, attachment)
-    delivery = await asyncio.to_thread(_deliver, message)
+    if not _ADDRESS_RE.match(to_address):
+        raise UpstreamUnavailableError("Recipient address is not a valid email address")
+
+    settings = get_settings()
+    if settings.azure_communication_endpoint and settings.acs_sender_address:
+        delivery = await _deliver_acs(to_address, subject, text_body, html_body, attachment)
+    else:
+        delivery = _write_preview(to_address, subject, text_body, html_body, attachment)
     logger.info("review email %s (subject=%r)", delivery, subject)
     return delivery

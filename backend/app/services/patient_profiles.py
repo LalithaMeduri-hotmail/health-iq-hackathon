@@ -313,6 +313,7 @@ async def history(profile: PatientProfile, *, owner_profile_id: str) -> ProfileH
         profile.account_id, profile.id, owner_profile_id=owner_profile_id
     )
     documents = await cosmos_repo.list_documents(profile.account_id, profile.id)
+    prescriptions = await cosmos_repo.list_prescriptions(profile.account_id, profile.id)
 
     items = [
         ProfileHistoryItem(
@@ -331,6 +332,15 @@ async def history(profile: PatientProfile, *, owner_profile_id: str) -> ProfileH
             label=document.document_type.replace("_", " ").title(),
         )
         for document in documents
+    )
+    items.extend(
+        ProfileHistoryItem(
+            kind="prescription",
+            resourceId=prescription.id,
+            occurredAt=prescription.issued_at[:10],
+            label=f"Health IQ prescription - {prescription.document.doctor_name}",
+        )
+        for prescription in prescriptions
     )
     items.sort(key=lambda item: item.occurred_at, reverse=True)
     return ProfileHistoryResponse(profileId=profile.id, items=items)

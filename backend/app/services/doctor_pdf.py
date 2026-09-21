@@ -98,12 +98,11 @@ def build_for_run(run: dict) -> tuple[str, bytes]:
     raise ValidationError("This run cannot be rendered as a doctor-review PDF")
 
 
-def build_outcome_document(run: dict, review: dict, patient_name: str) -> tuple[str, bytes]:
-    """Render the single Health IQ review summary for a decided review.
+def build_document_model(run: dict, review: dict, patient_name: str) -> PrescriptionDocument:
+    """The Health IQ review summary as data, for rendering now or storing as history.
 
     One document covers every medicine the clinician answered on, so the patient reads the
-    prescribed medicine, the equivalent Health IQ proposed, and the verdict on one page instead
-    of cross-referencing two separate PDFs.
+    prescribed medicine, the equivalent Health IQ proposed, and the verdict on one page.
     """
     if not review.get("decidedAt"):
         raise NotFoundError("This review has not been decided yet")
@@ -148,7 +147,7 @@ def build_outcome_document(run: dict, review: dict, patient_name: str) -> tuple[
         raise NotFoundError("This review has no decided medicines")
 
     reviewed_at = (review.get("decidedAt") or "")[:16].replace("T", " ") + " UTC"
-    document_model = PrescriptionDocument(
+    return PrescriptionDocument(
         patientName=patient_name,
         doctorName=review["doctorName"],
         doctorSpecialty=review["doctorSpecialty"],
@@ -159,9 +158,20 @@ def build_outcome_document(run: dict, review: dict, patient_name: str) -> tuple[
         lines=lines,
     )
 
-    issued_on = (review.get("decidedAt") or datetime.now(UTC).isoformat())[:10]
-    filename = f"HealthIQ-Review-Summary-{_slug(patient_name, 'Patient')}-{issued_on}.pdf"
+
+def render_document(document_model: PrescriptionDocument, issued_on: str = "") -> tuple[str, bytes]:
+    """Render a summary document to `(filename, pdf bytes)`, live or replayed from history."""
+    issued = issued_on or datetime.now(UTC).isoformat()[:10]
+    filename = (
+        f"HealthIQ-Review-Summary-{_slug(document_model.patient_name, 'Patient')}-{issued}.pdf"
+    )
     return filename, pdf_builder.build_prescription(document_model)
+
+
+def build_outcome_document(run: dict, review: dict, patient_name: str) -> tuple[str, bytes]:
+    """Render the single Health IQ review summary for a decided review."""
+    document_model = build_document_model(run, review, patient_name)
+    return render_document(document_model, (review.get("decidedAt") or "")[:10])
 
 
 def _line_note(decision: str, alternative: str, savings: int) -> str:

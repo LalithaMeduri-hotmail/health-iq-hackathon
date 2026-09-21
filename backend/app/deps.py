@@ -63,7 +63,9 @@ async def get_current_user(
 @lru_cache
 def get_azure_credential() -> DefaultAzureCredential:
     """Single shared async `DefaultAzureCredential` for every Azure SDK client."""
-    return DefaultAzureCredential()
+    # `az account get-access-token` regularly exceeds the 10s default on a loaded Windows box,
+    # which surfaces as a bogus ClientAuthenticationError rather than a slow call.
+    return DefaultAzureCredential(process_timeout=30)
 
 
 @lru_cache

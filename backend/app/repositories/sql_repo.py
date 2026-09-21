@@ -264,6 +264,23 @@ async def record_doctor_decision(
     )
 
 
+async def record_review_pin_attempt(
+    token_hash: str, *, failed_attempts: int, locked_until: str | None
+) -> bool:
+    """Persist PIN throttling counters for one review. `False` when the token is unknown."""
+    if _use_demo_store():
+        record = _DEMO_DOCTOR_REVIEWS.get(token_hash)
+        if record is None:
+            return False
+        record["pinFailedAttempts"] = failed_attempts
+        record["pinLockedUntil"] = locked_until
+        return True
+    raise NotImplementedError(
+        "Live Azure SQL DoctorReview writes are not wired yet; set DEMO_MODE=true or implement "
+        "the pyodbc path here."
+    )
+
+
 async def find_doctor_review(user_id: str, review_id: str) -> dict | None:
     """Look up one review by its short id, scoped by `userId`; `None` when the patient has none."""
     if _use_demo_store():

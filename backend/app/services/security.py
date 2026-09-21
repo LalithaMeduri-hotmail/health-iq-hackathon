@@ -57,4 +57,38 @@ def decode_session_token(token: str) -> str | None:
         payload = jwt.decode(token, _jwt_secret(), algorithms=[_JWT_ALGORITHM])
     except jwt.PyJWTError:
         return None
+    if payload.get("scope") is not None:
+        return None
     return payload.get("sub")
+
+
+_REVIEW_UNLOCK_SCOPE = "review-unlock"
+
+
+def generate_review_pin() -> str:
+    """Six digits, uniformly random. Emailed to the clinician; only its hash is ever stored."""
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def issue_review_unlock(token_hash: str, minutes: int) -> tuple[str, int]:
+    """Proof that this browser answered the PIN for one review. Scoped to that review alone."""
+    expires_in = minutes * 60
+    now = datetime.now(UTC)
+    payload = {
+        "sub": token_hash,
+        "scope": _REVIEW_UNLOCK_SCOPE,
+        "iat": now,
+        "exp": now + timedelta(seconds=expires_in),
+    }
+    return jwt.encode(payload, _jwt_secret(), algorithm=_JWT_ALGORITHM), expires_in
+
+
+def review_unlock_matches(value: str, token_hash: str) -> bool:
+    """True when `value` is an unexpired unlock issued for exactly this review."""
+    try:
+        payload = jwt.decode(value, _jwt_secret(), algorithms=[_JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        return False
+    if payload.get("scope") != _REVIEW_UNLOCK_SCOPE:
+        return False
+    return secrets.compare_digest(str(payload.get("sub", "")), token_hash)

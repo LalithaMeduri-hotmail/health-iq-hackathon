@@ -178,4 +178,20 @@ describe('DoctorReviewCard', () => {
     expect(await screen.findByText('Waiting for the doctor')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /PDF/ })).not.toBeInTheDocument();
   });
+
+  it('says so when the email never reached the doctor', async () => {
+    const undelivered = review({
+      status: 'pending',
+      decidedAt: null,
+      notes: null,
+      decisions: [],
+      delivery: 'failed',
+    });
+    renderCard({ runId: 'run-1', reviews: [undelivered], approved: false });
+
+    expect(await screen.findByText('Not delivered')).toBeInTheDocument();
+    expect(screen.getByText(/could not be delivered/)).toBeInTheDocument();
+    // Showing "waiting" here would leave the patient expecting an answer that cannot come.
+    expect(screen.queryByText('Waiting for the doctor')).not.toBeInTheDocument();
+  });
 });
