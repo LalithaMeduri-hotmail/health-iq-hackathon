@@ -510,6 +510,26 @@ def test_preview_mode_writes_a_message_instead_of_sending(client, tmp_path, monk
     assert response.json()["data"]["reviews"][0]["delivery"] == "preview"
 
 
+def test_a_failed_acs_send_falls_back_to_local_preview_mail(client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(email, "_LOCAL_MAIL_ROOT", tmp_path)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "azure_communication_endpoint", "https://acs.invalid")
+    monkeypatch.setattr(settings, "acs_sender_address", "no-reply@acs.invalid")
+
+    async def exploding_acs(*args, **kwargs):
+        raise UpstreamUnavailableError("Communication Services returned status 'Failed'")
+
+    monkeypatch.setattr(email, "_deliver_acs", exploding_acs)
+
+    run_id = _analyzed_run_id(client)
+    response = client.post(
+        "/api/v1/reviews/request", json={"runId": run_id, "doctorIds": ["doc-001"]}
+    )
+
+    assert response.json()["data"]["reviews"][0]["delivery"] == "preview"
+    assert len(list(tmp_path.glob("*.eml"))) == 1
+
+
 def test_the_email_carries_an_approval_button_pointing_at_the_review_page(
     client, tmp_path, monkeypatch
 ) -> None:

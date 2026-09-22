@@ -1,9 +1,10 @@
 """Outbound mail for doctor-review requests.
 
-One transport: Azure Communication Services Email, authenticated with `DefaultAzureCredential`
-so no mailbox password exists to leak. With `azure_communication_endpoint` unset the mailer stays
-in preview mode and writes the full RFC-822 message to `<repo>/.local-mail/*.eml`, so the flow is
-exercisable with no credentials at all.
+Preferred transport: Azure Communication Services Email, authenticated with
+`DefaultAzureCredential` so no mailbox password exists to leak. With `azure_communication_endpoint`
+unset - or when the ACS send fails for any reason - the mailer falls back to preview mode and
+writes the full RFC-822 message to `<repo>/.local-mail/*.eml`, so the flow is always exercisable
+and a transport outage never silently drops a review.
 """
 
 import logging
@@ -143,7 +144,13 @@ async def send(
 
     settings = get_settings()
     if settings.azure_communication_endpoint and settings.acs_sender_address:
-        delivery = await _deliver_acs(to_address, subject, text_body, html_body, attachment)
+        try:
+            delivery = await _deliver_acs(to_address, subject, text_body, html_body, attachment)
+        except UpstreamUnavailableError as exc:
+            # A transport outage must not lose the message: keep the local copy so the link and
+            # PIN can still be recovered, and so the demo keeps working offline.
+            logger.warning("ACS send failed, falling back to local preview mail: %s", exc.detail)
+            delivery = _write_preview(to_address, subject, text_body, html_body, attachment)
     else:
         delivery = _write_preview(to_address, subject, text_body, html_body, attachment)
     logger.info("review email %s (subject=%r)", delivery, subject)

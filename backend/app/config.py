@@ -45,8 +45,8 @@ class Settings(BaseSettings):
     public_api_base_url: str = "http://localhost:8000"
 
     # Outbound mail: Azure Communication Services Email, authenticated with
-    # `DefaultAzureCredential` so no mailbox password is ever stored. Unset keeps the mailer in
-    # preview mode, writing messages to `.local-mail/` instead of sending them.
+    # `DefaultAzureCredential` so no mailbox password is ever stored. Unset - or unreachable -
+    # falls back to preview mode, writing messages to `.local-mail/` instead of sending them.
     azure_communication_endpoint: str = ""
     acs_sender_address: str = ""
     # The one name every recipient sees. Kept here so the sender identity cannot drift per send;
