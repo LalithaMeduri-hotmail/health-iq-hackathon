@@ -24,13 +24,14 @@ async def resolve(share_id: str, request: Request, download: bool = False):
     """Public, unauthenticated route: the opaque token is the only credential. No PHI in the URL."""
     client_ip = request.client.host if request.client else "unknown"
     blob_path = await share_links.resolve_share_link(share_id, client_ip=client_ip)
+    filename = await share_links.filename_for(share_id)
 
     settings = get_settings()
     if not settings.demo_mode and settings.azure_storage_account_name:
-        return RedirectResponse(url=await share_links.build_sas_url(blob_path), status_code=302)
+        sas_url = await share_links.build_sas_url(blob_path, filename=filename, download=download)
+        return RedirectResponse(url=sas_url, status_code=302)
 
     content = await blob.read_generated_pdf(blob_path)
-    filename = await share_links.filename_for(share_id)
     disposition = "attachment" if download else "inline"
     return Response(
         content=content,

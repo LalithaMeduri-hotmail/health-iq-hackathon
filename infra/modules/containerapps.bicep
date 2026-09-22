@@ -1,5 +1,7 @@
 // Optional Azure Container Apps hosting for the FastAPI backend + React SPA (dev/demo environment only).
 // Not required for local development; deploy with `deployContainerApps = true` once container images exist.
+// The working, verified deployment path is `infra/scripts/deploy-demo.ps1`, which also builds the
+// images and grants the backend identity cross-resource-group data-plane RBAC.
 @description('Azure region for the resources.')
 param location string
 
@@ -95,12 +97,25 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = {
               name: 'SESSION_COOKIE_SECURE'
               value: 'true'
             }
+            {
+              // The SPA is served from a different hostname, so a Lax cookie would be dropped on
+              // every cross-site API call and sign-in would immediately 401.
+              name: 'SESSION_COOKIE_SAMESITE'
+              value: 'none'
+            }
+            {
+              name: 'CORS_ALLOWED_ORIGINS'
+              value: 'https://${frontendAppName}.${containerAppsEnvironment.properties.defaultDomain}'
+            }
           ]
         }
       ]
+      // Pinned to a single always-on replica: share links and doctor reviews still live in
+      // process memory (`sql_repo._DEMO_*`), so a second replica would not see links minted by
+      // the first, and scale-to-zero would discard them.
       scale: {
-        minReplicas: 0
-        maxReplicas: 3
+        minReplicas: 1
+        maxReplicas: 1
       }
     }
   }
@@ -129,12 +144,8 @@ resource frontendApp 'Microsoft.App/containerApps@2024-03-01' = {
             cpu: json('0.25')
             memory: '0.5Gi'
           }
-          env: [
-            {
-              name: 'VITE_API_BASE_URL'
-              value: 'https://${backendApp.properties.configuration.ingress.fqdn}'
-            }
-          ]
+          // No env here on purpose: Vite inlines `VITE_*` at build time, so the API origin must be
+          // passed as a docker build-arg when the image is built, not as a container env var.
         }
       ]
       scale: {

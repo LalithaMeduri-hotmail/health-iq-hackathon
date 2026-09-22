@@ -89,8 +89,13 @@ async def revoke_share_link(share_id: str, *, user_id: str) -> None:
 
 
 
-async def build_sas_url(blob_path: str) -> str:
-    """Read-only, single-blob user-delegation SAS valid for `SHARE_TTL_HOURS`."""
+async def build_sas_url(blob_path: str, *, filename: str, download: bool = False) -> str:
+    """Read-only, single-blob user-delegation SAS valid for `SHARE_TTL_HOURS`.
+
+    The generated PDFs are stored without a content type, so a bare SAS makes Blob Storage answer
+    `application/octet-stream` and the clinician gets an unnamed download. `rsct`/`rscd` override
+    both on the response.
+    """
     from azure.storage.blob import BlobSasPermissions, generate_blob_sas
 
     from app.deps import get_blob_service_client
@@ -103,6 +108,7 @@ async def build_sas_url(blob_path: str) -> str:
     expires_on = starts_on + timedelta(hours=SHARE_TTL_HOURS)
     delegation_key = await client.get_user_delegation_key(key_start_time=starts_on, key_expiry_time=expires_on)
 
+    disposition = "attachment" if download else "inline"
     token = generate_blob_sas(
         account_name=settings.azure_storage_account_name,
         container_name=container_name,
@@ -110,7 +116,16 @@ async def build_sas_url(blob_path: str) -> str:
         user_delegation_key=delegation_key,
         permission=BlobSasPermissions(read=True),
         expiry=expires_on,
+        content_type="application/pdf",
+        content_disposition=f'{disposition}; filename="{_header_safe(filename)}"',
     )
     # The SDK builds the blob URL; string-joining the account URL drops or doubles the separator.
     blob_url = client.get_blob_client(container=container_name, blob=blob_name).url
     return f"{blob_url}?{token}"
+
+
+def _header_safe(filename: str) -> str:
+    """ASCII-only, quote-free filename: it is interpolated straight into a response header."""
+    cleaned = filename.encode("ascii", "ignore").decode("ascii")
+    cleaned = "".join(character for character in cleaned if character not in '"\\\r\n')
+    return cleaned.strip() or "HealthIQ-Doctor-Review.pdf"

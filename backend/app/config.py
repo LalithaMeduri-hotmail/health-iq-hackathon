@@ -35,6 +35,10 @@ class Settings(BaseSettings):
 
     demo_mode: bool = True
     session_cookie_secure: bool = False
+    # `lax` suits a same-origin deployment. When the SPA is served from a different hostname than
+    # the API, browsers drop a Lax cookie on the cross-site XHR, so that setup needs
+    # `none` (which browsers only honour together with `session_cookie_secure=true`).
+    session_cookie_samesite: str = "lax"
     ocr_confidence_threshold: float = 0.75
     # An upload parked in the quarantine area is deleted if the caller never confirms which
     # patient profile it belongs to.
